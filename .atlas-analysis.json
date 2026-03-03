@@ -1,0 +1,87 @@
+{
+  "projectType": "saas",
+  "projectName": "ClipSync",
+  "projectDescription": "A Progressive Web App for syncing clipboard content across multiple devices in real-time.",
+  "theme": "almond",
+  "primaryColor": "#3b82f6",
+  "lightColor": "#60a5fa",
+  "darkColor": "#2563eb",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/session-management",
+              "features/clipboard-sync",
+              "features/file-sharing",
+              "features/offline-mode"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/setup-supabase",
+              "guides/pwa-installation",
+              "guides/multi-device-sync",
+              "guides/security"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "development/architecture",
+              "development/tech-stack",
+              "development/local-setup",
+              "development/contributing"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Services",
+            "pages": [
+              "api/session-service",
+              "api/clipboard-operations",
+              "api/file-upload"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/utilities"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Real-time clipboard synchronization across devices",
+    "Session-based multi-device connection",
+    "File and image sharing with compression",
+    "Progressive Web App with offline support",
+    "Search and history management",
+    "Dark mode support",
+    "Sensitive content masking"
+  ],
+  "publicApiSurface": [
+    "createSession(setSessionCode)",
+    "compressImage(imageFile, maxSizeMB, maxWidthOrHeight, useWebWorker)",
+    "convertLinksToAnchor(text, item)",
+    "Supabase client configuration"
+  ]
+}
