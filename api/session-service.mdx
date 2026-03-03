@@ -1,0 +1,86 @@
+---
+title: Session Service
+description: API reference for session management in ClipSync
+---
+
+The session service handles the creation and management of clipboard sync sessions. Sessions allow multiple devices to share clipboard content using unique session codes.
+
+## createSession
+
+Creates a new clipboard sync session with a randomly generated 5-character code.
+
+```javascript
+export const createSession = async (setSessionCode) => {
+    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let newCode = "";
+    for (let i = 0; i < 5; i++) {
+        newCode += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+
+    await supabase.from("sessions").insert([{ code: newCode }]);
+
+    setSessionCode(newCode);
+    localStorage.setItem("sessionCode", newCode);
+};
+```
+
+**Source:** `src/service/doc.service.js:3`
+
+### Parameters
+
+<ParamField path="setSessionCode" type="function" required>
+  State setter function to update the session code in the component state. This function receives the newly generated session code as its argument.
+</ParamField>
+
+### Return Value
+
+Returns a `Promise<void>` that resolves when the session has been created and stored.
+
+### Behavior
+
+1. **Code Generation**: Generates a 5-character alphanumeric code using uppercase letters (A-Z) and digits (0-9)
+2. **Database Storage**: Inserts the new session code into the `sessions` table in Supabase
+3. **State Update**: Calls the provided `setSessionCode` function with the new code
+4. **Local Persistence**: Stores the session code in localStorage under the key `sessionCode`
+
+### Code Generation Algorithm
+
+The function uses a simple random character selection algorithm:
+- Character set: `ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789` (36 possible characters)
+- Code length: 5 characters
+- Total possible combinations: 36^5 = 60,466,176 unique codes
+
+### Database Interaction
+
+The function interacts with Supabase by:
+- Inserting a new record into the `sessions` table
+- Schema: `{ code: string }`
+- No error handling is implemented in the function itself
+
+### Usage Example
+
+```javascript
+import { createSession } from "./service/doc.service";
+import { useState } from "react";
+
+function MyComponent() {
+  const [sessionCode, setSessionCode] = useState("");
+  
+  const handleCreateSession = async () => {
+    await createSession(setSessionCode);
+    console.log("Session created:", sessionCode);
+  };
+  
+  return (
+    <button onClick={handleCreateSession}>
+      Create New Session
+    </button>
+  );
+}
+```
+
+### Storage Locations
+
+- **Database**: Supabase `sessions` table
+- **Local Storage**: Key `sessionCode` (persists across browser sessions)
+- **Component State**: Via the `setSessionCode` callback

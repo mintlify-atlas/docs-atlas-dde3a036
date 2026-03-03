@@ -1,0 +1,304 @@
+---
+title: Setting Up Supabase
+description: Complete guide to configuring Supabase backend for ClipSync, including database tables, storage buckets, and real-time subscriptions
+---
+
+ClipSync uses Supabase as its backend infrastructure for real-time data synchronization, file storage, and database management. This guide walks you through the complete setup process.
+
+## Prerequisites
+
+- A Supabase account (sign up at [supabase.com](https://supabase.com))
+- Basic knowledge of SQL and environment variables
+
+## Create a Supabase Project
+
+<Steps>
+  <Step title="Create New Project">
+    1. Log in to your Supabase dashboard
+    2. Click "New Project"
+    3. Fill in your project details:
+       - Project name: `clipsync` (or your preferred name)
+       - Database password: Choose a strong password
+       - Region: Select the closest region to your users
+    4. Wait for the project to be provisioned (usually 1-2 minutes)
+  </Step>
+
+  <Step title="Get API Credentials">
+    Navigate to **Settings > API** in your Supabase dashboard and copy:
+    - Project URL (e.g., `https://xxxxxxxxxx.supabase.co`)
+    - Anon/Public Key (this is safe to use in client-side code)
+  </Step>
+</Steps>
+
+## Database Tables Setup
+
+ClipSync requires three database tables: `sessions`, `clipboard`, and `counter`. Create them using the SQL Editor in your Supabase dashboard.
+
+### Sessions Table
+
+Stores active clipboard sync sessions with unique codes.
+
+```sql
+CREATE TABLE sessions (
+  id BIGSERIAL PRIMARY KEY,
+  code VARCHAR(5) UNIQUE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Add index for faster lookups
+CREATE INDEX idx_sessions_code ON sessions(code);
+```
+
+**Referenced in:** `src/service/doc.service.js:10`
+
+<Note>
+  Session codes are 5-character alphanumeric strings (e.g., `AB12C`) that allow users to join the same sync session across multiple devices.
+</Note>
+
+### Clipboard Table
+
+Stores clipboard content entries for each session.
+
+```sql
+CREATE TABLE clipboard (
+  id BIGSERIAL PRIMARY KEY,
+  session_code VARCHAR(5) NOT NULL REFERENCES sessions(code) ON DELETE CASCADE,
+  content TEXT,
+  fileUrl TEXT,
+  file JSONB,
+  sensitive BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Add indexes for performance
+CREATE INDEX idx_clipboard_session_code ON clipboard(session_code);
+CREATE INDEX idx_clipboard_created_at ON clipboard(created_at DESC);
+```
+
+**Referenced in:** `src/App.jsx:34`, `src/App.jsx:179`
+
+<Warning>
+  The `content` field has a 15,000 character limit enforced at the application level (see `src/App.jsx:170`). Larger content should be stored as files.
+</Warning>
+
+**Field Descriptions:**
+- `session_code`: Links clipboard entry to a session
+- `content`: Text content (max 15,000 characters)
+- `fileUrl`: Public URL of uploaded file from storage
+- `file`: JSON metadata about the uploaded file (path, type, etc.)
+- `sensitive`: Boolean flag to hide sensitive content in UI
+
+### Counter Table
+
+Tracks application usage statistics.
+
+```sql
+CREATE TABLE counter (
+  id INTEGER PRIMARY KEY DEFAULT 1,
+  total INTEGER DEFAULT 0,
+  unique INTEGER DEFAULT 0,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Insert initial row
+INSERT INTO counter (id, total, unique) VALUES (1, 0, 0);
+
+-- Ensure only one row exists
+CREATE UNIQUE INDEX idx_counter_single_row ON counter(id);
+```
+
+**Referenced in:** `src/App.jsx:270`
+
+## Storage Bucket Setup
+
+ClipSync uses Supabase Storage to handle file and image uploads.
+
+<Steps>
+  <Step title="Create Storage Bucket">
+    1. Navigate to **Storage** in your Supabase dashboard
+    2. Click "Create Bucket"
+    3. Bucket name: `clipboard`
+    4. Set the bucket to **Public** (required for direct file access)
+  </Step>
+
+  <Step title="Configure Storage Policies">
+    Set up Row Level Security (RLS) policies for the clipboard bucket:
+
+    ```sql
+    -- Allow public read access
+    CREATE POLICY "Public read access"
+    ON storage.objects FOR SELECT
+    USING (bucket_id = 'clipboard');
+
+    -- Allow authenticated and anonymous uploads
+    CREATE POLICY "Public upload access"
+    ON storage.objects FOR INSERT
+    WITH CHECK (bucket_id = 'clipboard');
+
+    -- Allow delete access
+    CREATE POLICY "Public delete access"
+    ON storage.objects FOR DELETE
+    USING (bucket_id = 'clipboard');
+    ```
+  </Step>
+</Steps>
+
+**Referenced in:** `src/App.jsx:151`, `src/App.jsx:596`
+
+<Note>
+  Files are uploaded with a 3-character random prefix to prevent naming collisions (see `src/App.jsx:130-134`). Images are automatically compressed before upload using `browser-image-compression` (see `src/compressedFileUpload.jsx:3-16`).
+</Note>
+
+### File Upload Limits
+
+- Maximum file size: **10MB** (enforced at `src/App.jsx:125`)
+- Supported file types: Documents (Word, Excel, PowerPoint), PDFs, text files, and images
+- Images are compressed to max 0.2MB with 1920px max dimension before upload
+
+## Environment Variables Configuration
+
+Create a `.env` file in your client project root with your Supabase credentials.
+
+```bash .env
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-here
+```
+
+**Referenced in:** `src/config/supabase.js:1-2`
+
+<Warning>
+  Never commit your `.env` file to version control. Add it to `.gitignore` to keep your credentials secure.
+</Warning>
+
+The application initializes the Supabase client in `src/config/supabase.js:5`:
+
+```javascript
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export default supabase;
+```
+
+## Real-time Subscriptions Setup
+
+ClipSync uses Supabase Real-time to sync clipboard changes across devices instantly.
+
+### Enable Real-time for Tables
+
+<Steps>
+  <Step title="Enable Real-time Replication">
+    1. Go to **Database > Replication** in Supabase dashboard
+    2. Enable replication for the `clipboard` table
+    3. Select all events: `INSERT`, `UPDATE`, `DELETE`
+  </Step>
+
+  <Step title="Verify Real-time Configuration">
+    The application subscribes to clipboard changes in `src/App.jsx:387-403`:
+
+    ```javascript
+    const channel = supabase
+      .channel("clipboard")
+      .on("postgres_changes", 
+        { event: "*", schema: "public", table: "clipboard" }, 
+        (payload) => {
+          if (payload.new.session_code === sessionCode && payload.eventType === "INSERT") {
+            setHistory((prev) => [payload.new, ...prev]);
+          }
+          if (payload.eventType === "DELETE") {
+            setHistory((prev) => prev.filter((item) => item.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  Real-time subscriptions are automatically cleaned up when users leave a session or close the app (see `src/App.jsx:407-409`).
+</Tip>
+
+### How Real-time Works
+
+1. **INSERT events**: When a user sends clipboard content, all devices in the session instantly receive it
+2. **DELETE events**: When content is deleted, it's removed from all connected devices
+3. **Session isolation**: Each subscription filters by `session_code` to ensure users only see their session's data
+
+## Database Security
+
+### Row Level Security (RLS)
+
+While ClipSync currently uses the anon key for simplicity, consider implementing RLS policies for production:
+
+```sql
+-- Enable RLS on tables
+ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clipboard ENABLE ROW LEVEL SECURITY;
+ALTER TABLE counter ENABLE ROW LEVEL SECURITY;
+
+-- Allow all operations for now (customize based on your needs)
+CREATE POLICY "Allow all" ON sessions FOR ALL USING (true);
+CREATE POLICY "Allow all" ON clipboard FOR ALL USING (true);
+CREATE POLICY "Allow all" ON counter FOR ALL USING (true);
+```
+
+<Warning>
+  The current implementation allows public access to all tables. For production use, implement proper RLS policies to restrict access based on session codes.
+</Warning>
+
+## Verification
+
+Test your Supabase setup:
+
+<Steps>
+  <Step title="Test Database Connection">
+    Open your browser console and verify no Supabase connection errors
+  </Step>
+
+  <Step title="Create a Session">
+    Click "Send to Clipboard" without joining a session - a new 5-character code should be generated
+  </Step>
+
+  <Step title="Test Real-time Sync">
+    1. Copy your session code
+    2. Open ClipSync in another browser tab or device
+    3. Join using the same session code
+    4. Send clipboard content from one device
+    5. Verify it appears instantly on the other device
+  </Step>
+
+  <Step title="Test File Upload">
+    Upload an image or file and verify it appears in your Supabase Storage bucket
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Connection Issues
+
+- Verify your `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are correct
+- Check that environment variables are loaded (restart dev server after changes)
+- Ensure your Supabase project is active and not paused
+
+### Real-time Not Working
+
+- Confirm Real-time is enabled for the `clipboard` table
+- Check browser console for WebSocket connection errors
+- Verify the user is online (ClipSync shows an offline indicator)
+
+### File Upload Failures
+
+- Check file size is under 10MB
+- Verify the `clipboard` storage bucket exists and is public
+- Ensure storage policies allow public uploads
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="PWA Installation" icon="mobile" href="/guides/pwa-installation">
+    Install ClipSync as a Progressive Web App
+  </Card>
+  <Card title="Multi-Device Sync" icon="arrows-rotate" href="/guides/multi-device-sync">
+    Learn how to sync across devices
+  </Card>
+</CardGroup>

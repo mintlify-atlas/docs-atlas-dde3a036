@@ -1,0 +1,194 @@
+---
+title: Session Management
+description: Learn how ClipSync sessions work, including creating, joining, and managing sessions across multiple devices.
+---
+
+## Overview
+
+ClipSync uses session-based synchronization to enable real-time clipboard sharing across multiple devices. Each session is identified by a unique 5-character alphanumeric code that devices use to join and sync clipboard content.
+
+## How Sessions Work
+
+Sessions are the core mechanism for connecting devices in ClipSync:
+
+- Each session has a unique **5-character code** (e.g., `A3B7K`)
+- Multiple devices can join the same session using the code
+- All devices in a session see real-time updates when content is added
+- Sessions persist in the Supabase database until explicitly deleted
+
+## Creating a New Session
+
+When you first send clipboard content without joining an existing session, ClipSync automatically creates a new session for you.
+
+### Session Code Generation
+
+The session code is generated using a random combination of uppercase letters (A-Z) and numbers (0-9):
+
+```javascript src/service/doc.service.js
+export const createSession = async (setSessionCode) => {
+    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let newCode = "";
+    for (let i = 0; i < 5; i++) {
+        newCode += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+
+    await supabase.from("sessions").insert([{ code: newCode }]);
+
+    setSessionCode(newCode);
+    localStorage.setItem("sessionCode", newCode);
+};
+```
+
+### Automatic Session Creation
+
+From App.jsx:167-177, when you send content without an active session:
+
+```javascript src/App.jsx:167-177
+const updateClipboard = async () => {
+    if (!clipboard && !fileUrl) return toast.error("Please enter some text to update clipboard");
+    if (clipboard.length > 15000) return toast.error("Clipboard content is too long. Please keep it under 15000 characters.");
+
+    let firstTime = false;
+
+    if (!sessionCode) {
+        await createSession(setSessionCode);
+        firstTime = true;
+    }
+    const code = localStorage.getItem("sessionCode");
+    // ...
+};
+```
+
+## Joining an Existing Session
+
+To sync with devices already in a session, you need to enter the session code.
+
+### Join Process
+
+1. Enter the 5-character session code in the input field
+2. Click the "Join" button
+3. ClipSync validates the code exists in the database
+4. If valid, your device joins and retrieves the clipboard history
+
+<CodeGroup>
+```javascript src/App.jsx:87-119
+const joinSession = async () => {
+    if (!inputCode.trim()) return toast.error("Please enter a session code");
+
+    // Check if session exists
+    const { data: sessionData, error: sessionError } = await supabase
+        .from("sessions")
+        .select("*")
+        .eq("code", inputCode.toUpperCase());
+
+    if (sessionData.length == 0 || sessionError) {
+        toast.error("This session code does not exist. Please enter a valid code.");
+        return;
+    }
+
+    setSessionCode(inputCode.toUpperCase());
+    localStorage.setItem("sessionCode", inputCode.toUpperCase());
+
+    const { data, error } = await supabase
+        .from("clipboard")
+        .select("*")
+        .eq("session_code", inputCode.toUpperCase())
+        .order("created_at", { ascending: false });
+
+    if (error) {
+        toast.error("An error occurred while fetching clipboard history");
+        return;
+    }
+
+    toast.success(`Joined session ${inputCode.toUpperCase()} successfully!`);
+    setInputCode("");
+    setClipboard("");
+    if (!error) setHistory(data);
+};
+```
+</CodeGroup>
+
+<Note>
+Session codes are case-insensitive and automatically converted to uppercase for consistency.
+</Note>
+
+## Leaving a Session
+
+You can leave a session at any time by clicking the logout icon next to the session code.
+
+From App.jsx:484-494:
+
+```javascript src/App.jsx:484-494
+<button
+    aria-label="Leave Session"
+    className="text-red-500 ml-4 active:text-red-700 active:scale-95" 
+    onClick={() => {
+        const ans = confirm("Are you sure you want to leave the session?");
+        if (!ans) return;
+        setSessionCode("");
+        localStorage.removeItem("sessionCode");
+        sessionStorage.removeItem("clipboard");
+        setHistory([]);
+    }}>
+    <LogOut size={17} />
+</button>
+```
+
+<Warning>
+Leaving a session clears your local clipboard history and session data. The session and its data remain in the database for other connected devices.
+</Warning>
+
+## Session Persistence
+
+ClipSync uses **localStorage** to remember your session across browser sessions:
+
+### Auto-Reconnect on Page Load
+
+From App.jsx:64-85:
+
+```javascript src/App.jsx:64-85
+useEffect(() => {
+    const storedSession = localStorage.getItem("sessionCode");
+    if (storedSession) {
+        setSessionCode(storedSession);
+        (async () => {
+            const { data, error } = await supabase
+                .from("clipboard")
+                .select("*")
+                .eq("session_code", storedSession.toUpperCase())
+                .order("created_at", { ascending: false });
+
+            if (error) {
+                toast.error("An error occurred while fetching clipboard history");
+                return;
+            }
+
+            setHistory(data);
+        })();
+    }
+
+    console.clear();
+}, []);
+```
+
+### Storage Keys
+
+- **`localStorage.sessionCode`**: Stores the current session code for persistence
+- **`sessionStorage.clipboard`**: Temporarily stores clipboard input (cleared on tab close)
+
+<Info>
+If you return to ClipSync in the same browser, you'll automatically rejoin your last session.
+</Info>
+
+## Session Sharing
+
+To connect multiple devices:
+
+1. Create or join a session on your first device
+2. Note the 5-character session code displayed at the top
+3. On other devices, enter this code and click "Join"
+4. All devices can now send and receive clipboard content in real-time
+
+<Tip>
+Use the share button in the top-right corner to quickly share the session URL with other devices.
+</Tip>

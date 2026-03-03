@@ -1,0 +1,334 @@
+---
+title: Installation
+description: Set up ClipSync locally for development with this comprehensive installation guide
+---
+
+# Installation Guide
+
+This guide will help you set up ClipSync locally for development. The project uses Bun as the JavaScript runtime and package manager.
+
+## Prerequisites
+
+<Steps>
+  <Step title="Install Bun">
+    ClipSync requires [Bun](https://bun.sh) to be installed on your system.
+    
+    <CodeGroup>
+    ```bash macOS/Linux
+    curl -fsSL https://bun.sh/install | bash
+    ```
+    
+    ```bash Windows
+    powershell -c "irm bun.sh/install.ps1 | iex"
+    ```
+    </CodeGroup>
+    
+    Verify the installation:
+    
+    ```bash
+    bun --version
+    ```
+  </Step>
+  
+  <Step title="Set up Supabase">
+    ClipSync uses Supabase for backend services. You'll need:
+    
+    1. A Supabase account (free tier works fine)
+    2. A new Supabase project
+    3. Your project's URL and anon key
+    
+    <Info>
+      Get your credentials from your Supabase project dashboard under **Settings** > **API**.
+    </Info>
+  </Step>
+</Steps>
+
+## Clone the Repository
+
+<Steps>
+  <Step title="Clone the repo">
+    ```bash
+    git clone <repository-url>
+    cd client
+    ```
+    
+    <Note>
+      Replace `<repository-url>` with the actual repository URL.
+    </Note>
+  </Step>
+</Steps>
+
+## Environment Configuration
+
+<Steps>
+  <Step title="Create environment file">
+    Create a `.env` file in the client directory:
+    
+    ```bash
+    touch .env
+    ```
+  </Step>
+  
+  <Step title="Add environment variables">
+    Add the following variables to your `.env` file:
+    
+    ```bash .env
+    VITE_SUPABASE_URL=your_supabase_project_url
+    VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+    ```
+    
+    <Warning>
+      Never commit your `.env` file to version control. It's already included in `.gitignore`.
+    </Warning>
+    
+    **Example:**
+    ```bash
+    VITE_SUPABASE_URL=https://qthpintkaihcmklahkwf.supabase.co
+    VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+    ```
+  </Step>
+</Steps>
+
+## Database Setup
+
+<Steps>
+  <Step title="Create database tables">
+    In your Supabase project, create the following tables:
+    
+    **Sessions table:**
+    ```sql
+    CREATE TABLE sessions (
+      id BIGSERIAL PRIMARY KEY,
+      code VARCHAR(5) UNIQUE NOT NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    ```
+    
+    **Clipboard table:**
+    ```sql
+    CREATE TABLE clipboard (
+      id BIGSERIAL PRIMARY KEY,
+      session_code VARCHAR(5) NOT NULL,
+      content TEXT,
+      fileUrl TEXT,
+      file JSONB,
+      sensitive BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    ```
+    
+    **Counter table (for visitor tracking):**
+    ```sql
+    CREATE TABLE counter (
+      id INTEGER PRIMARY KEY,
+      total INTEGER DEFAULT 0,
+      unique INTEGER DEFAULT 0
+    );
+    
+    INSERT INTO counter (id, total, unique) VALUES (1, 0, 0);
+    ```
+  </Step>
+  
+  <Step title="Set up Storage bucket">
+    Create a storage bucket named `clipboard` in your Supabase Storage:
+    
+    1. Go to **Storage** in your Supabase dashboard
+    2. Click **New bucket**
+    3. Name it `clipboard`
+    4. Set it to **Public** for file access
+    5. Configure bucket policies for public read access
+  </Step>
+  
+  <Step title="Enable Realtime">
+    Enable real-time for the clipboard table:
+    
+    1. Go to **Database** > **Replication**
+    2. Enable replication for the `clipboard` table
+    
+    <Info>
+      Real-time subscriptions are used to sync clipboard content across devices instantly.
+    </Info>
+  </Step>
+</Steps>
+
+## Install Dependencies
+
+<Steps>
+  <Step title="Install packages">
+    Install all required dependencies:
+    
+    ```bash
+    bun install
+    ```
+    
+    This will install:
+    - React 19 and React DOM
+    - Supabase client library
+    - TanStack Query for data fetching
+    - Lucide React for icons
+    - Tailwind CSS for styling
+    - Vite PWA plugin for Progressive Web App features
+    - And other dependencies listed in `package.json`
+  </Step>
+</Steps>
+
+## Run Development Server
+
+<Steps>
+  <Step title="Start the dev server">
+    <CodeGroup>
+    ```bash Development
+    bun run dev
+    ```
+    
+    ```bash Production Build
+    bun run build
+    ```
+    
+    ```bash Preview Production
+    bun run preview
+    ```
+    </CodeGroup>
+    
+    The application will be available at `http://localhost:5173` (default Vite port).
+  </Step>
+  
+  <Step title="Verify installation">
+    Open your browser and navigate to `http://localhost:5173`. You should see:
+    
+    - The ClipSync interface
+    - Session code input field
+    - Clipboard textarea
+    - File upload buttons
+    
+    <Tip>
+      Try creating a session and syncing content to ensure everything is working correctly.
+    </Tip>
+  </Step>
+</Steps>
+
+## Project Structure
+
+The ClipSync client follows this structure:
+
+```
+client/
+├── src/
+│   ├── App.jsx                    # Main application component
+│   ├── main.jsx                   # Application entry point
+│   ├── config/
+│   │   └── supabase.js           # Supabase client configuration
+│   ├── service/
+│   │   └── doc.service.js        # Session creation service
+│   ├── utils/
+│   │   └── index.js              # Utility functions (link conversion, etc.)
+│   └── compressedFileUpload.jsx  # Image compression logic
+├── public/                        # Static assets and PWA icons
+├── vite.config.js                # Vite and PWA configuration
+├── tailwind.config.js            # Tailwind CSS configuration
+├── package.json                  # Dependencies and scripts
+└── .env                          # Environment variables (create this)
+```
+
+## Configuration Files
+
+### Vite Configuration
+
+The `vite.config.js` configures the PWA manifest:
+
+```javascript vite.config.js
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
+
+export default defineConfig({
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      workbox: {
+        globPatterns: ["**/*"],
+      },
+      manifest: {
+        "name": "ClipSync",
+        "short_name": "ClipSync",
+        "description": "A web app for syncing clipboard across devices.",
+        "start_url": "/",
+        "display": "standalone",
+        "theme_color": "#000000",
+        "background_color": "#000000"
+      }
+    })
+  ]
+})
+```
+
+### Supabase Client
+
+The Supabase client is configured in `src/config/supabase.js`:
+
+```javascript src/config/supabase.js
+import { createClient } from "@supabase/supabase-js";
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+export default supabase;
+```
+
+## Development Scripts
+
+Available scripts in `package.json`:
+
+| Command | Description |
+|---------|-------------|
+| `bun run dev` | Start development server with hot reload |
+| `bun run build` | Build for production |
+| `bun run preview` | Preview production build locally |
+| `bun run lint` | Run ESLint for code quality |
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Environment variables not loading">
+    - Ensure your `.env` file is in the client root directory
+    - Restart the development server after adding environment variables
+    - Verify variables are prefixed with `VITE_`
+  </Accordion>
+  
+  <Accordion title="Supabase connection errors">
+    - Verify your Supabase URL and anon key are correct
+    - Check that your Supabase project is active
+    - Ensure your IP is not blocked by Supabase
+  </Accordion>
+  
+  <Accordion title="Real-time not working">
+    - Verify real-time is enabled for the clipboard table
+    - Check browser console for WebSocket connection errors
+    - Ensure you're using the correct session code
+  </Accordion>
+  
+  <Accordion title="File upload failing">
+    - Confirm the `clipboard` storage bucket exists and is public
+    - Check file size is under 10MB
+    - Verify storage bucket policies allow uploads
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Learn how to use ClipSync
+  </Card>
+  
+  <Card title="GitHub Repository" icon="github" href="https://github.com">
+    View the source code
+  </Card>
+</CardGroup>
+
+<Note>
+  For production deployment, consider using platforms like Cloudflare Pages, Vercel, or Netlify that support Vite applications.
+</Note>

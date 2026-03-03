@@ -1,0 +1,559 @@
+---
+title: Multi-Device Synchronization
+description: Complete guide to syncing clipboard content across multiple devices using ClipSync's session-based system with real-time updates
+---
+
+ClipSync enables seamless clipboard synchronization across all your devices using unique session codes. This guide covers the complete workflow, best practices, and tips for effective multi-device usage.
+
+## How Multi-Device Sync Works
+
+ClipSync uses a session-based architecture where devices share a common 5-character session code to sync clipboard content in real-time.
+
+### Architecture Overview
+
+1. **Session Creation**: First device generates a unique 5-character alphanumeric code
+2. **Session Joining**: Other devices join using the same code
+3. **Real-time Sync**: All changes propagate instantly via Supabase Real-time
+4. **Persistent Storage**: Content persists in the database until manually deleted
+
+**Referenced in:** `src/service/doc.service.js:3-14`, `src/App.jsx:387-403`
+
+## Complete Sync Workflow
+
+### Starting a New Session
+
+<Steps>
+  <Step title="Open ClipSync on First Device">
+    Navigate to ClipSync on your primary device (computer, phone, or tablet).
+  </Step>
+
+  <Step title="Send Your First Clipboard Content">
+    1. Type or paste content into the text area
+    2. Optionally attach files or images
+    3. Click "Send to Clipboard"
+    
+    A unique 5-character session code will be automatically generated and displayed.
+    
+    **Referenced in:** `src/service/doc.service.js:3-14`
+    
+    ```javascript
+    // Session code generation algorithm
+    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let newCode = "";
+    for (let i = 0; i < 5; i++) {
+      newCode += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    ```
+    
+    Example codes: `A3X9K`, `7BMT2`, `QP5WN`
+  </Step>
+
+  <Step title="Save Your Session Code">
+    Your session code will be displayed prominently at the top:
+    
+    > Session Code: **A3X9K**
+    
+    This code is automatically saved in your browser's local storage, so you'll remain in the session even after closing the browser.
+    
+    **Referenced in:** `src/App.jsx:102`, `src/App.jsx:213`
+  </Step>
+</Steps>
+
+<Note>
+  The session code is stored in `localStorage` under the key `sessionCode` (see `src/App.jsx:65-82`). This means you stay connected to your session across browser restarts.
+</Note>
+
+### Joining from Another Device
+
+<Steps>
+  <Step title="Open ClipSync on Second Device">
+    Open ClipSync on any other device (phone, tablet, another computer).
+  </Step>
+
+  <Step title="Enter Session Code">
+    1. Look for the "Enter session code to retrieve" input field
+    2. Type the 5-character code from your first device
+    3. Click the "Join" button
+    
+    **Referenced in:** `src/App.jsx:87-119`
+  </Step>
+
+  <Step title="Verify Connection">
+    You'll see:
+    - Success message: "Joined session A3X9K successfully!"
+    - Your session code displayed at the top
+    - All existing clipboard history from the session
+    
+    **Referenced in:** `src/App.jsx:115`
+  </Step>
+
+  <Step title="Start Syncing">
+    Any content sent from any device in the session will instantly appear on all connected devices.
+  </Step>
+</Steps>
+
+<Warning>
+  If you enter an invalid or non-existent session code, you'll receive an error: "This session code does not exist. Please enter a valid code." (see `src/App.jsx:96-98`)
+</Warning>
+
+### Adding More Devices
+
+Repeat the joining process on as many devices as you need:
+- Desktop computers (Windows, Mac, Linux)
+- Mobile phones (iOS, Android)
+- Tablets
+- Multiple browsers on the same device
+
+**All devices in the same session see identical content in real-time.**
+
+## Real-Time Synchronization
+
+### How Real-Time Updates Work
+
+ClipSync uses Supabase Real-time (WebSocket) for instant synchronization:
+
+```javascript
+const channel = supabase
+  .channel("clipboard")
+  .on("postgres_changes", 
+    { event: "*", schema: "public", table: "clipboard" }, 
+    (payload) => {
+      if (payload.new.session_code === sessionCode && payload.eventType === "INSERT") {
+        setHistory((prev) => [payload.new, ...prev]);
+      }
+      if (payload.eventType === "DELETE") {
+        setHistory((prev) => prev.filter((item) => item.id !== payload.old.id));
+      }
+    }
+  )
+  .subscribe();
+```
+
+**Referenced in:** `src/App.jsx:387-409`
+
+### What Gets Synced
+
+<AccordionGroup>
+  <Accordion title="Text Content">
+    - Plain text up to 15,000 characters
+    - URLs (automatically converted to clickable links)
+    - Code snippets
+    - Formatted text (markdown, etc.)
+    
+    **Referenced in:** `src/App.jsx:169-170`
+  </Accordion>
+
+  <Accordion title="Files">
+    - Documents (.doc, .docx, .xls, .xlsx, .ppt, .pptx)
+    - PDFs (.pdf)
+    - Text files (.txt)
+    - Max size: 10MB per file
+    
+    **Referenced in:** `src/App.jsx:124-127`
+  </Accordion>
+
+  <Accordion title="Images">
+    - All image formats (.png, .jpg, .jpeg, .gif, .webp, etc.)
+    - Automatically compressed to max 0.2MB
+    - Max dimensions: 1920px width/height
+    - Original quality preserved for smaller images
+    
+    **Referenced in:** `src/App.jsx:140-147`, `src/compressedFileUpload.jsx:3-16`
+  </Accordion>
+
+  <Accordion title="Sensitive Content Flags">
+    - Checkbox to mark content as sensitive
+    - Sensitive content is replaced with asterisks in history view
+    - Still synced to all devices but hidden for privacy
+    
+    **Referenced in:** `src/App.jsx:531-536`, `src/utils/index.js:2-5`
+  </Accordion>
+</AccordionGroup>
+
+### Sync Speed
+
+- **Text content**: Instant (< 100ms typically)
+- **Small files** (< 1MB): 1-2 seconds
+- **Large files** (up to 10MB): 5-10 seconds depending on connection
+- **Image compression**: Adds 1-3 seconds before upload
+
+<Tip>
+  Images are compressed client-side before upload to save bandwidth and sync faster (see `src/compressedFileUpload.jsx`).
+</Tip>
+
+## Common Use Cases
+
+### 1. Desktop to Mobile Transfer
+
+**Scenario:** Copy a long text or link on your desktop and access it on your phone.
+
+<Steps>
+  <Step title="On Desktop">
+    1. Create session or join existing one
+    2. Paste content and click "Send to Clipboard"
+  </Step>
+
+  <Step title="On Mobile">
+    1. Open ClipSync (install as PWA for quick access)
+    2. Join using session code
+    3. Tap the copy icon next to the content
+    4. Content is now in your phone's clipboard
+  </Step>
+</Steps>
+
+**Perfect for:**
+- Long URLs or links
+- Addresses and contact info
+- Confirmation codes and passwords
+- Text you're composing on desktop but need on mobile
+
+### 2. Team Collaboration
+
+**Scenario:** Share snippets, links, or files with team members in real-time.
+
+<Steps>
+  <Step title="Create Team Session">
+    One team member creates a session and shares the code via Slack, Teams, or email.
+  </Step>
+
+  <Step title="Team Joins">
+    All team members join the same session code.
+  </Step>
+
+  <Step title="Share Content">
+    Anyone can send:
+    - Meeting links
+    - Code snippets
+    - Design files (up to 10MB)
+    - Documentation links
+    - Shared credentials (use sensitive flag)
+  </Step>
+</Steps>
+
+**Referenced in:** Share feature at `src/App.jsx:441-448`
+
+<Tip>
+  Use the built-in share button (top-right) to send the ClipSync URL and invite others to your session.
+</Tip>
+
+### 3. Cross-Platform Development
+
+**Scenario:** Develop on one OS and test on another.
+
+<Steps>
+  <Step title="Share Test Data">
+    Send test credentials, API keys, or config data from development machine.
+  </Step>
+
+  <Step title="Access on Test Device">
+    Retrieve the data on your test device (VM, phone, tablet).
+  </Step>
+
+  <Step title="Share Results">
+    Send logs, error messages, or screenshots back for debugging.
+  </Step>
+</Steps>
+
+### 4. Temporary File Transfer
+
+**Scenario:** Quickly send a document or image between devices without email or cloud storage.
+
+<Steps>
+  <Step title="Upload File">
+    Click "Attach File" or "Attach Image" and select file (max 10MB).
+  </Step>
+
+  <Step title="Access on Other Device">
+    File appears with a download link on all connected devices.
+  </Step>
+
+  <Step title="Clean Up">
+    Delete the file after transfer to free up storage.
+  </Step>
+</Steps>
+
+**Referenced in:** `src/App.jsx:121-165` (file upload system)
+
+## Session Management
+
+### Staying in a Session
+
+Your session code is automatically saved in browser local storage:
+
+```javascript
+localStorage.setItem("sessionCode", inputCode.toUpperCase());
+```
+
+**Referenced in:** `src/App.jsx:102`, `src/App.jsx:213`
+
+**This means:**
+- You remain in the session after closing the browser
+- You can close and reopen ClipSync without rejoining
+- Clearing browser data will remove your session
+
+### Leaving a Session
+
+<Steps>
+  <Step title="Click Leave Button">
+    Click the red logout icon (🚪) next to your session code.
+    
+    **Referenced in:** `src/App.jsx:485-494`
+  </Step>
+
+  <Step title="Confirm Action">
+    A confirmation dialog will appear: "Are you sure you want to leave the session?"
+  </Step>
+
+  <Step title="Session Cleared">
+    Your device will:
+    - Remove session code from local storage
+    - Clear clipboard history from view
+    - Disconnect from real-time updates
+    
+    **Other devices in the session are not affected.**
+  </Step>
+</Steps>
+
+<Warning>
+  Leaving a session only disconnects your device. The session and its content remain active for other devices and can be rejoined using the same code.
+</Warning>
+
+### Deleting Session Content
+
+#### Clear All Clipboard Items
+
+<Steps>
+  <Step title="Click Delete All Button">
+    Click the trash icon at the top of the "Clipboard History" section.
+    
+    **Referenced in:** `src/App.jsx:225-243`
+  </Step>
+
+  <Step title="Confirm Deletion">
+    Confirm the action: "Are you sure you want to clear clipboards?"
+  </Step>
+
+  <Step title="Content Deleted">
+    - All clipboard items are deleted from the database
+    - Attached files are removed from storage
+    - All connected devices see the deletion in real-time
+  </Step>
+</Steps>
+
+#### Edit or Delete Individual Items
+
+**Edit Item:**
+1. Click the green edit icon (✏️) next to an item
+2. Content loads into the editor
+3. Make changes and click "Send to Clipboard"
+4. Original item is deleted, new one is created
+
+**Referenced in:** `src/App.jsx:249-266`
+
+<Note>
+  When editing, the item is removed from the database and added to your editor. If you navigate away without sending, the content is lost.
+</Note>
+
+## Best Practices
+
+### Security and Privacy
+
+<Tip>
+  Mark sensitive content with the "Sensitive" checkbox before sending. This hides the content in clipboard history (shown as asterisks) while still syncing to all devices.
+</Tip>
+
+**Referenced in:** `src/App.jsx:531-536`, `src/utils/index.js:2-5`
+
+- **Use unique sessions**: Create a new session for each use case or project
+- **Don't share session codes publicly**: Anyone with the code can access all content
+- **Mark sensitive content**: Use the sensitive flag for passwords, API keys, credentials
+- **Clean up regularly**: Delete old content you no longer need
+- **Leave sessions**: Exit sessions you're no longer using
+
+### Performance Optimization
+
+**For Large Files:**
+- Compress images before upload (automatic for images)
+- Stay under 10MB file size limit
+- Use file sharing services for larger files
+
+**For Many Items:**
+- Use search to find specific content (search box available in history)
+- Delete old items to keep history manageable
+- Consider creating separate sessions for different projects
+
+**Referenced in:** `src/App.jsx:412-420` (search functionality)
+
+### Network Considerations
+
+**Offline Behavior:**
+When offline, ClipSync displays a warning banner:
+
+> You are offline. Please connect to the internet to sync clipboard content.
+
+**Referenced in:** `src/App.jsx:27`, `src/App.jsx:40-53`, `src/App.jsx:474-477`
+
+**What happens offline:**
+- Can view existing clipboard history
+- Can type in the editor (saved to session storage)
+- Cannot send or receive new content
+- Cannot upload files
+- Real-time sync pauses
+
+**When back online:**
+- Reconnects automatically
+- Fetches latest clipboard history
+- Resumes real-time sync
+
+**Referenced in:** `src/App.jsx:40-53`
+
+### Session Organization Tips
+
+1. **Personal vs. Shared Sessions**
+   - Keep a personal session for your own devices
+   - Create separate sessions for collaboration
+
+2. **Project-Based Sessions**
+   - One session per project or client
+   - Easier to track and clean up
+
+3. **Temporary Sessions**
+   - Create throw-away sessions for one-time transfers
+   - Leave and forget after use
+
+4. **Long-Term Sessions**
+   - Use for ongoing personal sync
+   - Regularly clean up old content
+   - Save the session code somewhere safe
+
+## Troubleshooting Multi-Device Sync
+
+### Content Not Appearing on Other Devices
+
+**Check these:**
+1. Both devices are using the exact same session code (case-insensitive)
+2. Both devices are online (check for offline warning banner)
+3. Browser console shows no errors
+4. Real-time subscription is active (visible in Network tab > WS)
+
+**Solution:**
+- Refresh the page on the device not receiving updates
+- Leave and rejoin the session
+- Check your internet connection
+
+### Session Code Not Working
+
+**Error: "This session code does not exist"**
+
+**Referenced in:** `src/App.jsx:96-98`
+
+**Causes:**
+- Typo in session code (double-check all 5 characters)
+- Session was never created (ensure first device sent content)
+- Database connectivity issue
+
+**Solution:**
+- Verify the exact session code from the first device
+- Ensure the first device successfully created the session
+- Try creating a new session
+
+### Slow Sync Performance
+
+**If content takes > 5 seconds to sync:**
+
+1. **Check file size**: Large files (> 5MB) take longer
+2. **Check internet speed**: Slow connections affect sync speed
+3. **Check device performance**: Old devices may process slower
+4. **Image compression**: Large images need compression time
+
+**Referenced in:** `src/compressedFileUpload.jsx:3-16`
+
+### Files Not Uploading
+
+**Common issues:**
+- File exceeds 10MB limit (see error: "File size exceeds 10MB")
+- Unsupported file type
+- Storage bucket not configured in Supabase
+- No internet connection
+
+**Referenced in:** `src/App.jsx:125-127`
+
+**Solution:**
+- Compress files before upload
+- Verify file type is supported
+- Check Supabase storage configuration
+
+## Advanced Features
+
+### Search Clipboard History
+
+<Steps>
+  <Step title="Open Search">
+    Look for the search box above your clipboard history.
+    
+    **Referenced in:** `src/App.jsx:628-636`
+  </Step>
+
+  <Step title="Type Search Query">
+    Enter keywords to filter your clipboard history.
+    
+    Search is case-insensitive and matches content text.
+  </Step>
+
+  <Step title="View Results">
+    Only matching items are displayed.
+    
+    Clear search to see all items again.
+  </Step>
+</Steps>
+
+**Implementation:**
+
+```javascript
+const results = history.filter((item) => 
+  item.content.toLowerCase().includes(searchKeyword.toLowerCase())
+);
+```
+
+**Referenced in:** `src/App.jsx:412-420`
+
+### Link Detection
+
+URLs in clipboard content are automatically converted to clickable links:
+
+```javascript
+const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
+return text.replace(urlRegex, (url) => {
+  let hyperlink = url.startsWith("www.") ? `https://${url}` : url;
+  return `<a href="${hyperlink}" target="_blank">${url}</a>`;
+});
+```
+
+**Referenced in:** `src/utils/index.js:6-10`
+
+<Tip>
+  Links open in a new tab when clicked, making it easy to navigate to shared URLs.
+</Tip>
+
+### Dark Mode Sync
+
+Dark mode preference is saved per-device in local storage:
+
+```javascript
+localStorage.setItem('darkMode', JSON.stringify(newMode));
+```
+
+**Referenced in:** `src/App.jsx:23-26`, `src/App.jsx:56-62`
+
+Each device can use its own theme preference independent of the session.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Security Best Practices" icon="shield" href="/guides/security">
+    Learn about security features and best practices
+  </Card>
+  <Card title="PWA Installation" icon="mobile" href="/guides/pwa-installation">
+    Install ClipSync for faster access
+  </Card>
+</CardGroup>

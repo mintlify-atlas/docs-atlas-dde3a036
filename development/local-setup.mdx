@@ -1,0 +1,693 @@
+---
+title: Local Development Setup
+description: Complete guide to setting up ClipSync development environment on your machine
+---
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed on your system:
+
+<CardGroup cols={2}>
+  <Card title="Node.js" icon="node-js">
+    **Version**: 18.x or higher
+    
+    [Download Node.js](https://nodejs.org)
+  </Card>
+  
+  <Card title="Package Manager" icon="box">
+    **Options**: npm, yarn, pnpm, or bun
+    
+    Comes with Node.js (npm)
+  </Card>
+  
+  <Card title="Git" icon="git">
+    **Version**: 2.x or higher
+    
+    [Download Git](https://git-scm.com)
+  </Card>
+  
+  <Card title="Code Editor" icon="code">
+    **Recommended**: VS Code
+    
+    [Download VS Code](https://code.visualstudio.com)
+  </Card>
+</CardGroup>
+
+### Verify Installation
+
+<Steps>
+  <Step title="Check Node.js Version">
+    ```bash
+    node --version
+    # Should output v18.x.x or higher
+    ```
+  </Step>
+  
+  <Step title="Check npm Version">
+    ```bash
+    npm --version
+    # Should output 9.x.x or higher
+    ```
+  </Step>
+  
+  <Step title="Check Git Version">
+    ```bash
+    git --version
+    # Should output git version 2.x.x
+    ```
+  </Step>
+</Steps>
+
+## Supabase Account Setup
+
+<Warning>
+You'll need a Supabase project to run ClipSync locally. The app cannot function without a configured backend.
+</Warning>
+
+### Create Supabase Project
+
+<Steps>
+  <Step title="Sign Up for Supabase">
+    1. Go to [supabase.com](https://supabase.com)
+    2. Click "Start your project"
+    3. Sign up with GitHub or email
+  </Step>
+  
+  <Step title="Create New Project">
+    1. Click "New Project"
+    2. Choose an organization (or create one)
+    3. Fill in project details:
+       - **Name**: ClipSync (or any name)
+       - **Database Password**: Generate a strong password
+       - **Region**: Choose closest to you
+    4. Click "Create new project"
+    5. Wait for project to finish setting up (~2 minutes)
+  </Step>
+  
+  <Step title="Get API Credentials">
+    1. Navigate to **Settings** → **API**
+    2. Copy the following values:
+       - **Project URL** (under "Project URL")
+       - **anon public** key (under "Project API keys")
+    
+    <Info>
+    Keep these credentials safe! You'll need them for the `.env` file.
+    </Info>
+  </Step>
+</Steps>
+
+### Set Up Database Tables
+
+<Steps>
+  <Step title="Open SQL Editor">
+    Navigate to **SQL Editor** in the left sidebar
+  </Step>
+  
+  <Step title="Create Tables">
+    Run the following SQL queries to create required tables:
+    
+    <CodeGroup>
+    ```sql sessions table
+    CREATE TABLE sessions (
+      id BIGSERIAL PRIMARY KEY,
+      code VARCHAR(5) UNIQUE NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    
+    -- Create index for faster lookups
+    CREATE INDEX idx_sessions_code ON sessions(code);
+    ```
+    
+    ```sql clipboard table
+    CREATE TABLE clipboard (
+      id BIGSERIAL PRIMARY KEY,
+      session_code VARCHAR(5) NOT NULL,
+      content TEXT,
+      fileUrl TEXT,
+      file JSONB,
+      sensitive BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    
+    -- Create indexes
+    CREATE INDEX idx_clipboard_session ON clipboard(session_code);
+    CREATE INDEX idx_clipboard_created ON clipboard(created_at DESC);
+    ```
+    
+    ```sql counter table
+    CREATE TABLE counter (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      total INTEGER DEFAULT 0,
+      unique INTEGER DEFAULT 0,
+      CHECK (id = 1)
+    );
+    
+    -- Insert initial counter
+    INSERT INTO counter (id, total, unique) VALUES (1, 0, 0);
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Enable Realtime">
+    Enable realtime for the clipboard table:
+    
+    1. Navigate to **Database** → **Replication**
+    2. Find the `clipboard` table
+    3. Toggle **Enable Realtime** to ON
+    
+    Or run this SQL:
+    ```sql
+    ALTER PUBLICATION supabase_realtime ADD TABLE clipboard;
+    ```
+  </Step>
+</Steps>
+
+### Set Up Storage Bucket
+
+<Steps>
+  <Step title="Navigate to Storage">
+    Go to **Storage** in the left sidebar
+  </Step>
+  
+  <Step title="Create Bucket">
+    1. Click "New bucket"
+    2. **Name**: `clipboard`
+    3. **Public bucket**: Toggle ON (files need to be publicly accessible)
+    4. Click "Create bucket"
+  </Step>
+  
+  <Step title="Configure Bucket Policies">
+    Set up storage policies to allow uploads and deletes:
+    
+    1. Click on the `clipboard` bucket
+    2. Go to **Policies** tab
+    3. Add the following policies:
+    
+    <AccordionGroup>
+      <Accordion title="Allow Upload Policy">
+        ```sql
+        CREATE POLICY "Allow public uploads"
+        ON storage.objects FOR INSERT
+        TO public
+        WITH CHECK (bucket_id = 'clipboard');
+        ```
+      </Accordion>
+      
+      <Accordion title="Allow Public Access Policy">
+        ```sql
+        CREATE POLICY "Allow public access"
+        ON storage.objects FOR SELECT
+        TO public
+        USING (bucket_id = 'clipboard');
+        ```
+      </Accordion>
+      
+      <Accordion title="Allow Delete Policy">
+        ```sql
+        CREATE POLICY "Allow public deletes"
+        ON storage.objects FOR DELETE
+        TO public
+        USING (bucket_id = 'clipboard');
+        ```
+      </Accordion>
+    </AccordionGroup>
+  </Step>
+</Steps>
+
+<Info>
+In a production environment, you would want to add authentication and restrict these policies to authenticated users only.
+</Info>
+
+## Project Setup
+
+### Clone Repository
+
+<Steps>
+  <Step title="Clone the Repo">
+    ```bash
+    git clone <repository-url>
+    cd clipsync
+    ```
+    
+    Replace `<repository-url>` with the actual repository URL.
+  </Step>
+  
+  <Step title="Navigate to Client Directory">
+    ```bash
+    cd client
+    ```
+    
+    The client application is in the `client/` subdirectory.
+  </Step>
+</Steps>
+
+### Install Dependencies
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn install
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm install
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun install
+    ```
+    
+    <Info>
+    The project uses `bun.lockb`, suggesting Bun was used during development.
+    </Info>
+  </Tab>
+</Tabs>
+
+Reference: `package.json:12-38`
+
+### Environment Configuration
+
+<Steps>
+  <Step title="Create .env File">
+    Create a `.env` file in the `client/` directory:
+    
+    ```bash
+    touch .env
+    ```
+  </Step>
+  
+  <Step title="Add Environment Variables">
+    Add your Supabase credentials to `.env`:
+    
+    ```bash .env
+    VITE_SUPABASE_URL=your_supabase_project_url
+    VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+    ```
+    
+    <Warning>
+    Replace `your_supabase_project_url` and `your_supabase_anon_key` with the actual values from your Supabase project settings.
+    </Warning>
+  </Step>
+  
+  <Step title="Update Storage URL (if needed)">
+    If your Supabase project URL is different, update the storage URL in `src/App.jsx`:
+    
+    ```jsx src/App.jsx:156
+    const url = `https://YOUR_PROJECT_ID.supabase.co/storage/v1/object/public/${data.fullPath}`;
+    ```
+    
+    Replace `YOUR_PROJECT_ID` with your actual Supabase project ID.
+    
+    Reference: `src/App.jsx:156`
+  </Step>
+</Steps>
+
+Reference: `src/config/supabase.js:1-7`
+
+### Verify Configuration
+
+<Steps>
+  <Step title="Check .env File">
+    Ensure your `.env` file looks like this:
+    
+    ```bash
+    VITE_SUPABASE_URL=https://xxxxxxxxxxxxx.supabase.co
+    VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+    ```
+  </Step>
+  
+  <Step title="Add to .gitignore">
+    Ensure `.env` is in `.gitignore` to avoid committing secrets:
+    
+    ```bash .gitignore
+    .env
+    .env.local
+    .env.production
+    ```
+  </Step>
+</Steps>
+
+## Running Locally
+
+### Development Server
+
+Reference: `package.json:7`
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm run dev
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn dev
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm dev
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun dev
+    ```
+  </Tab>
+</Tabs>
+
+<Steps>
+  <Step title="Start Development Server">
+    Run the dev command. You should see output like:
+    
+    ```bash
+    VITE v6.2.0  ready in 350 ms
+    
+    ➜  Local:   http://localhost:5173/
+    ➜  Network: use --host to expose
+    ➜  press h + enter to show help
+    ```
+  </Step>
+  
+  <Step title="Open in Browser">
+    Navigate to [http://localhost:5173](http://localhost:5173)
+    
+    The app should load with the ClipSync interface.
+  </Step>
+  
+  <Step title="Test Functionality">
+    1. Enter some text in the clipboard textarea
+    2. Click "Send to Clipboard"
+    3. A session code should be generated
+    4. Verify the clipboard entry appears in the history
+  </Step>
+</Steps>
+
+<Info>
+**Hot Module Replacement (HMR)** is enabled by default. Changes to your code will instantly reflect in the browser without a full reload.
+</Info>
+
+### Development Workflow
+
+<Steps>
+  <Step title="File Watching">
+    Vite watches all files in `src/` for changes. Save any file to see instant updates.
+  </Step>
+  
+  <Step title="Error Handling">
+    Errors appear both in the browser overlay and terminal console.
+  </Step>
+  
+  <Step title="Network Access">
+    To test on other devices (mobile, tablet), use:
+    
+    ```bash
+    npm run dev -- --host
+    ```
+    
+    Then access via your local IP (e.g., `http://192.168.1.100:5173`)
+  </Step>
+</Steps>
+
+## Build and Preview
+
+### Production Build
+
+Reference: `package.json:8`
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm run build
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn build
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm build
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun run build
+    ```
+  </Tab>
+</Tabs>
+
+This command:
+1. Runs type checking (if TypeScript is configured)
+2. Bundles and minifies all assets
+3. Optimizes images and fonts
+4. Generates service worker for PWA
+5. Outputs production-ready files to `dist/`
+
+<Info>
+Build output typically includes:
+- HTML, CSS, JS files (minified & hashed)
+- Service worker
+- PWA manifest
+- Static assets (images, fonts, icons)
+</Info>
+
+### Preview Production Build
+
+Reference: `package.json:10`
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm run preview
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn preview
+    ```
+  </Tab>
+  
+  <Tab title="pnpm">
+    ```bash
+    pnpm preview
+    ```
+  </Tab>
+  
+  <Tab title="bun">
+    ```bash
+    bun preview
+    ```
+  </Tab>
+</Tabs>
+
+This starts a local server serving the built files from `dist/`.
+
+<Warning>
+The preview server is for local testing only. Do not use it in production.
+</Warning>
+
+### Lint Code
+
+Reference: `package.json:9`
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm run lint
+    ```
+  </Tab>
+  
+  <Tab title="yarn">
+    ```bash
+    yarn lint
+    ```
+  </Tab>
+</Tabs>
+
+Runs ESLint to check for code quality issues and style violations.
+
+Reference: `eslint.config.js:7-38`
+
+## Development Tips
+
+### VS Code Extensions
+
+<CardGroup cols={2}>
+  <Card title="ESLint" icon="shield-check">
+    **ID**: `dbaeumer.vscode-eslint`
+    
+    Highlights linting errors in real-time
+  </Card>
+  
+  <Card title="Tailwind CSS IntelliSense" icon="paintbrush">
+    **ID**: `bradlc.vscode-tailwindcss`
+    
+    Autocomplete for Tailwind classes
+  </Card>
+  
+  <Card title="ES7+ React Snippets" icon="react">
+    **ID**: `dsznajder.es7-react-js-snippets`
+    
+    React code snippets and shortcuts
+  </Card>
+  
+  <Card title="Prettier" icon="wand-magic-sparkles">
+    **ID**: `esbenp.prettier-vscode`
+    
+    Code formatting on save
+  </Card>
+</CardGroup>
+
+### Browser DevTools
+
+<Tabs>
+  <Tab title="React DevTools">
+    Install the [React DevTools](https://react.dev/learn/react-developer-tools) browser extension to:
+    - Inspect component tree
+    - View component props and state
+    - Profile performance
+  </Tab>
+  
+  <Tab title="Network Tab">
+    Monitor Supabase API calls:
+    - Database queries
+    - Storage uploads
+    - Realtime WebSocket connections
+  </Tab>
+  
+  <Tab title="Application Tab">
+    Check PWA features:
+    - Service Worker status
+    - Cache storage
+    - localStorage/sessionStorage
+    - Manifest
+  </Tab>
+</Tabs>
+
+### Testing Realtime Sync
+
+<Steps>
+  <Step title="Open Multiple Tabs">
+    Open ClipSync in 2+ browser tabs or windows
+  </Step>
+  
+  <Step title="Join Same Session">
+    Use the same session code in all tabs
+  </Step>
+  
+  <Step title="Test Sync">
+    Add clipboard content in one tab and watch it appear instantly in others
+  </Step>
+  
+  <Step title="Test Delete">
+    Delete an item in one tab and verify it disappears in all tabs
+  </Step>
+</Steps>
+
+### Testing Offline Mode
+
+<Steps>
+  <Step title="Open DevTools">
+    Press F12 to open browser DevTools
+  </Step>
+  
+  <Step title="Simulate Offline">
+    1. Go to **Network** tab
+    2. Change throttling to "Offline"
+    3. Reload the page
+  </Step>
+  
+  <Step title="Verify Offline Banner">
+    You should see the red "You are offline" banner
+  </Step>
+  
+  <Step title="Go Back Online">
+    1. Change throttling back to "Online"
+    2. The app should reconnect automatically
+    3. Clipboard history should refetch
+  </Step>
+</Steps>
+
+Reference: `src/App.jsx:40-53`
+
+### Common Development Issues
+
+<AccordionGroup>
+  <Accordion title="Port Already in Use" icon="exclamation-triangle">
+    **Error**: `Port 5173 is already in use`
+    
+    **Solution**:
+    ```bash
+    # Kill process on port 5173 (macOS/Linux)
+    lsof -ti:5173 | xargs kill -9
+    
+    # Or use a different port
+    npm run dev -- --port 3000
+    ```
+  </Accordion>
+  
+  <Accordion title="Supabase Connection Failed" icon="plug">
+    **Error**: Network errors when loading the app
+    
+    **Solution**:
+    1. Verify `.env` variables are correct
+    2. Check Supabase project is running (not paused)
+    3. Ensure you're using the correct API URL (not the reference ID)
+    4. Restart the dev server after changing `.env`
+  </Accordion>
+  
+  <Accordion title="Realtime Not Working" icon="wifi">
+    **Error**: Changes don't sync between tabs
+    
+    **Solution**:
+    1. Verify Realtime is enabled for the `clipboard` table
+    2. Check browser console for WebSocket errors
+    3. Ensure both tabs are using the same session code
+    4. Check Supabase realtime quota (free tier has limits)
+  </Accordion>
+  
+  <Accordion title="File Upload Fails" icon="file-circle-xmark">
+    **Error**: File upload returns 403 or 401
+    
+    **Solution**:
+    1. Verify storage bucket `clipboard` exists
+    2. Check bucket policies allow public uploads
+    3. Ensure bucket is set to public
+    4. Update hardcoded storage URL in `src/App.jsx:156`
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/development/architecture">
+    Learn about the system architecture
+  </Card>
+  
+  <Card title="Contributing" icon="code-pull-request" href="/development/contributing">
+    Guidelines for contributing to ClipSync
+  </Card>
+  
+  <Card title="Tech Stack" icon="layer-group" href="/development/tech-stack">
+    Deep dive into technologies used
+  </Card>
+</CardGroup>

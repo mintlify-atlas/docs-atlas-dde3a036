@@ -1,0 +1,893 @@
+---
+title: Contributing Guide
+description: How to contribute to ClipSync - code style, workflow, and best practices
+---
+
+## Welcome Contributors
+
+Thank you for your interest in contributing to ClipSync! This guide will help you get started with contributing code, reporting issues, and improving documentation.
+
+<Info>
+ClipSync is an open-source project, and we welcome contributions of all kinds - from bug fixes to new features, documentation improvements to performance optimizations.
+</Info>
+
+## Getting Started
+
+### Before You Begin
+
+<Steps>
+  <Step title="Set Up Development Environment">
+    Follow the [Local Setup Guide](/development/local-setup) to get ClipSync running on your machine.
+  </Step>
+  
+  <Step title="Understand the Architecture">
+    Read the [Architecture Documentation](/development/architecture) to understand how the app works.
+  </Step>
+  
+  <Step title="Check Existing Issues">
+    Look through [GitHub Issues](https://github.com/your-repo/issues) to see if your idea or bug is already being discussed.
+  </Step>
+</Steps>
+
+### Fork and Clone
+
+<Steps>
+  <Step title="Fork the Repository">
+    Click the "Fork" button on the GitHub repository to create your own copy.
+  </Step>
+  
+  <Step title="Clone Your Fork">
+    ```bash
+    git clone https://github.com/YOUR_USERNAME/clipsync.git
+    cd clipsync/client
+    ```
+  </Step>
+  
+  <Step title="Add Upstream Remote">
+    ```bash
+    git remote add upstream https://github.com/ORIGINAL_OWNER/clipsync.git
+    ```
+    
+    This allows you to sync with the main repository.
+  </Step>
+</Steps>
+
+## Project Structure
+
+Understanding the codebase structure will help you navigate and contribute effectively:
+
+```
+client/
+├── public/                    # Static assets
+│   ├── favicon/              # App icons and manifest
+│   ├── screenshots/          # App screenshots for PWA
+│   └── robots.txt
+├── src/
+│   ├── assets/               # Images and static resources
+│   ├── config/               # Configuration files
+│   │   └── supabase.js       # Supabase client setup
+│   ├── service/              # Business logic
+│   │   └── doc.service.js    # Session management
+│   ├── utils/                # Helper functions
+│   │   └── index.js          # Utility functions
+│   ├── App.jsx               # Main application component
+│   ├── App.css               # App-specific styles
+│   ├── compressedFileUpload.jsx  # Image compression
+│   ├── index.css             # Global styles (Tailwind)
+│   └── main.jsx              # Application entry point
+├── eslint.config.js          # ESLint configuration
+├── tailwind.config.js        # Tailwind CSS configuration
+├── vite.config.js            # Vite and PWA configuration
+├── package.json              # Dependencies and scripts
+└── README.md                 # Project documentation
+```
+
+### Key Files
+
+<AccordionGroup>
+  <Accordion title="src/App.jsx" icon="react">
+    **Lines**: 706 total
+    
+    The main application component containing:
+    - State management
+    - Supabase realtime subscriptions
+    - UI components
+    - Clipboard operations
+    - File upload logic
+    
+    Reference: `src/App.jsx:1-706`
+  </Accordion>
+  
+  <Accordion title="src/config/supabase.js" icon="database">
+    **Lines**: 7 total
+    
+    Initializes the Supabase client with environment variables.
+    
+    Reference: `src/config/supabase.js:1-7`
+  </Accordion>
+  
+  <Accordion title="src/service/doc.service.js" icon="server">
+    **Lines**: 14 total
+    
+    Contains the `createSession` function for generating random session codes.
+    
+    Reference: `src/service/doc.service.js:1-14`
+  </Accordion>
+  
+  <Accordion title="vite.config.js" icon="gear">
+    **Lines**: 52 total
+    
+    Configures Vite and PWA settings including manifest and service worker.
+    
+    Reference: `vite.config.js:1-52`
+  </Accordion>
+</AccordionGroup>
+
+## Code Style Guidelines
+
+### JavaScript/React Conventions
+
+<Tabs>
+  <Tab title="Component Style">
+    **Use Functional Components**
+    
+    ```jsx
+    // ✅ Good - Functional component with hooks
+    export default function App() {
+        const [state, setState] = useState("");
+        
+        useEffect(() => {
+            // Side effects here
+        }, [dependencies]);
+        
+        return <div>...</div>;
+    }
+    
+    // ❌ Avoid - Class components
+    class App extends React.Component {
+        // ...
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Naming Conventions">
+    **Follow these naming patterns:**
+    
+    ```jsx
+    // Components: PascalCase
+    function ClipboardItem() { }
+    
+    // Functions: camelCase
+    const updateClipboard = () => { };
+    const handleEdit = async (id) => { };
+    
+    // Constants: camelCase (or UPPER_CASE for true constants)
+    const sessionCode = "ABC123";
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    
+    // Event handlers: handle* or on* prefix
+    const handleSearch = (e) => { };
+    const onButtonClick = () => { };
+    ```
+  </Tab>
+  
+  <Tab title="Async/Await">
+    **Prefer async/await over promises**
+    
+    ```jsx
+    // ✅ Good - async/await
+    const fetchData = async () => {
+        const { data, error } = await supabase
+            .from("clipboard")
+            .select("*");
+        
+        if (error) {
+            toast.error("An error occurred");
+            return;
+        }
+        
+        setData(data);
+    };
+    
+    // ❌ Avoid - promise chains
+    const fetchData = () => {
+        supabase.from("clipboard").select("*")
+            .then(({ data, error }) => { })
+            .catch(err => { });
+    };
+    ```
+  </Tab>
+  
+  <Tab title="Error Handling">
+    **Always handle errors gracefully**
+    
+    ```jsx
+    // ✅ Good - Check for errors
+    const { data, error } = await supabase.from("table").select();
+    if (error) {
+        toast.error("An error occurred while fetching data");
+        console.error(error);
+        return;
+    }
+    
+    // ✅ Good - Try-catch for file operations
+    try {
+        const compressedFile = await compressImage(file);
+        file = compressedFile;
+    } catch (error) {
+        toast.error("An error occurred while compressing image");
+        return;
+    }
+    ```
+    
+    Reference: `src/App.jsx:140-147`
+  </Tab>
+</Tabs>
+
+### CSS/Tailwind Conventions
+
+<Tabs>
+  <Tab title="Utility Classes">
+    **Use Tailwind utilities consistently**
+    
+    ```jsx
+    // ✅ Good - Organized by category
+    <button className="
+        flex items-center gap-2          // Layout
+        px-4 py-2 rounded-lg             // Spacing & Border
+        bg-blue-500 text-white           // Colors
+        hover:bg-blue-600 active:scale-95 // States
+        transition                       // Animation
+    ">
+        Click Me
+    </button>
+    
+    // ❌ Avoid - Random order
+    <button className="text-white transition gap-2 px-4 bg-blue-500 rounded-lg flex py-2 items-center">
+    ```
+  </Tab>
+  
+  <Tab title="Responsive Design">
+    **Use responsive prefixes**
+    
+    ```jsx
+    <div className="
+        p-3 md:p-6                    // Mobile-first padding
+        text-2xl md:text-3xl          // Responsive text
+        max-w-5xl lg:max-w-4xl md:max-w-3xl  // Responsive width
+    ">
+    ```
+    
+    Reference: `src/App.jsx:467-468`
+  </Tab>
+  
+  <Tab title="Dark Mode">
+    **Use conditional classes for dark mode**
+    
+    ```jsx
+    <div className={`
+        ${isDarkMode 
+            ? 'bg-gray-900 text-gray-200' 
+            : 'bg-white text-gray-900'
+        }
+    `}>
+    ```
+    
+    Reference: `src/App.jsx:427-428`
+  </Tab>
+  
+  <Tab title="Avoid Custom CSS">
+    **Prefer Tailwind utilities over custom CSS**
+    
+    ```jsx
+    // ✅ Good - Tailwind utilities
+    <div className="flex items-center justify-center min-h-screen">
+    
+    // ❌ Avoid - Custom CSS
+    <div className="custom-centered">
+    // .custom-centered { display: flex; ... }
+    ```
+    
+    <Info>
+    Only use custom CSS in `App.css` for unique cases that Tailwind doesn't cover.
+    </Info>
+  </Tab>
+</Tabs>
+
+### Supabase Best Practices
+
+<AccordionGroup>
+  <Accordion title="Query Patterns" icon="database">
+    **Structure queries consistently:**
+    
+    ```jsx
+    // Always destructure { data, error }
+    const { data, error } = await supabase
+        .from("clipboard")
+        .select("*")
+        .eq("session_code", sessionCode)
+        .order("created_at", { ascending: false });
+    
+    // Check error first
+    if (error) {
+        toast.error("Error message");
+        return;
+    }
+    
+    // Then use data
+    setHistory(data);
+    ```
+    
+    Reference: `src/App.jsx:68-82`
+  </Accordion>
+  
+  <Accordion title="Realtime Subscriptions" icon="wifi">
+    **Clean up subscriptions:**
+    
+    ```jsx
+    useEffect(() => {
+        if (!sessionCode) return;
+        
+        const channel = supabase
+            .channel("clipboard")
+            .on("postgres_changes", {...}, callback)
+            .subscribe();
+        
+        // Important: Clean up on unmount
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [sessionCode]);
+    ```
+    
+    Reference: `src/App.jsx:386-410`
+  </Accordion>
+  
+  <Accordion title="Storage Operations" icon="folder">
+    **Handle file uploads properly:**
+    
+    ```jsx
+    // Show loading state
+    const toastId = toast.loading("Uploading file...");
+    
+    try {
+        // Upload with unique filename
+        const { data, error } = await supabase.storage
+            .from("clipboard")
+            .upload(`files/${randomId + file.name}`, file);
+        
+        if (error) throw error;
+        
+        // Update toast to success
+        toast.success("File uploaded!", { id: toastId });
+    } catch (error) {
+        toast.error("Upload failed", { id: toastId });
+    }
+    ```
+    
+    Reference: `src/App.jsx:136-164`
+  </Accordion>
+</AccordionGroup>
+
+## Development Workflow
+
+### Creating a New Feature
+
+<Steps>
+  <Step title="Create a Feature Branch">
+    ```bash
+    git checkout -b feature/your-feature-name
+    ```
+    
+    **Branch naming:**
+    - `feature/` - New features
+    - `fix/` - Bug fixes
+    - `docs/` - Documentation updates
+    - `refactor/` - Code refactoring
+    - `perf/` - Performance improvements
+  </Step>
+  
+  <Step title="Make Your Changes">
+    Write your code following the style guidelines above.
+    
+    **Tips:**
+    - Keep commits focused and atomic
+    - Test your changes locally
+    - Check console for errors
+  </Step>
+  
+  <Step title="Test Thoroughly">
+    <Tabs>
+      <Tab title="Manual Testing">
+        1. Test in Chrome, Firefox, and Safari
+        2. Test on mobile device
+        3. Test with multiple browser tabs
+        4. Test offline mode
+        5. Test file uploads (images and documents)
+      </Tab>
+      
+      <Tab title="Edge Cases">
+        - Empty session code
+        - Very long clipboard content (>15000 chars)
+        - Large file uploads (>10MB)
+        - Poor network conditions
+        - Realtime sync with multiple devices
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step title="Run Linter">
+    ```bash
+    npm run lint
+    ```
+    
+    Fix any linting errors before committing.
+    
+    Reference: `package.json:9`
+  </Step>
+  
+  <Step title="Commit Your Changes">
+    ```bash
+    git add .
+    git commit -m "feat: add search functionality to clipboard history"
+    ```
+    
+    **Commit message format:**
+    ```
+    <type>: <description>
+    
+    [optional body]
+    ```
+    
+    **Types:**
+    - `feat`: New feature
+    - `fix`: Bug fix
+    - `docs`: Documentation
+    - `style`: Formatting
+    - `refactor`: Code refactoring
+    - `perf`: Performance
+    - `test`: Tests
+    - `chore`: Maintenance
+  </Step>
+</Steps>
+
+### Syncing with Upstream
+
+<Steps>
+  <Step title="Fetch Latest Changes">
+    ```bash
+    git fetch upstream
+    ```
+  </Step>
+  
+  <Step title="Merge Main Branch">
+    ```bash
+    git checkout main
+    git merge upstream/main
+    ```
+  </Step>
+  
+  <Step title="Rebase Your Feature Branch">
+    ```bash
+    git checkout feature/your-feature-name
+    git rebase main
+    ```
+    
+    Resolve any conflicts if they occur.
+  </Step>
+</Steps>
+
+## Testing Approach
+
+### Manual Testing Checklist
+
+<Tabs>
+  <Tab title="Core Functionality">
+    <Accordion title="Session Management">
+      - [ ] Generate new session
+      - [ ] Join existing session
+      - [ ] Session code validation
+      - [ ] Leave session
+      - [ ] Session persistence across refreshes
+    </Accordion>
+    
+    <Accordion title="Clipboard Operations">
+      - [ ] Add clipboard content
+      - [ ] Copy content to clipboard
+      - [ ] Edit clipboard entry
+      - [ ] Delete single entry
+      - [ ] Delete all entries
+      - [ ] Mark content as sensitive
+    </Accordion>
+    
+    <Accordion title="File Operations">
+      - [ ] Upload text file
+      - [ ] Upload image (compression works)
+      - [ ] Upload document (PDF, Word, etc.)
+      - [ ] Download/view uploaded file
+      - [ ] Delete uploaded file
+      - [ ] File size validation (>10MB rejected)
+    </Accordion>
+    
+    <Accordion title="Realtime Sync">
+      - [ ] New entries appear in other tabs
+      - [ ] Deleted entries disappear in other tabs
+      - [ ] Syncs across different devices
+      - [ ] Handles network interruptions
+    </Accordion>
+  </Tab>
+  
+  <Tab title="UI/UX">
+    <Accordion title="Responsive Design">
+      - [ ] Mobile layout (< 768px)
+      - [ ] Tablet layout (768px - 1024px)
+      - [ ] Desktop layout (> 1024px)
+      - [ ] Touch interactions work on mobile
+    </Accordion>
+    
+    <Accordion title="Dark Mode">
+      - [ ] Toggle dark/light mode
+      - [ ] Preference persists
+      - [ ] All colors are readable
+      - [ ] Respects system preference
+    </Accordion>
+    
+    <Accordion title="Accessibility">
+      - [ ] Keyboard navigation works
+      - [ ] ARIA labels on buttons
+      - [ ] Focus indicators visible
+      - [ ] Color contrast sufficient
+    </Accordion>
+  </Tab>
+  
+  <Tab title="PWA Features">
+    <Accordion title="Installation">
+      - [ ] Install prompt appears
+      - [ ] App installs correctly
+      - [ ] App icon shows in home screen
+      - [ ] Opens in standalone mode
+    </Accordion>
+    
+    <Accordion title="Offline Mode">
+      - [ ] Offline banner appears
+      - [ ] Cached assets load offline
+      - [ ] Reconnects when back online
+      - [ ] Syncs pending changes
+    </Accordion>
+  </Tab>
+</Tabs>
+
+### Testing Realtime Sync
+
+<Steps>
+  <Step title="Open Multiple Windows">
+    Open ClipSync in 3+ browser windows/tabs
+  </Step>
+  
+  <Step title="Use Different Browsers">
+    Test in Chrome, Firefox, and Safari simultaneously
+  </Step>
+  
+  <Step title="Test Scenarios">
+    - Add content in Window A → Should appear in B and C
+    - Delete in Window B → Should disappear in A and C
+    - Edit in Window C → Should update in A and B
+    - Upload file in A → Should appear with link in B and C
+  </Step>
+</Steps>
+
+### Performance Testing
+
+<CardGroup cols={2}>
+  <Card title="Large History" icon="list">
+    Test with 100+ clipboard entries
+    
+    - Scroll performance
+    - Search responsiveness
+    - Memory usage
+  </Card>
+  
+  <Card title="File Uploads" icon="file-arrow-up">
+    Test file upload performance
+    
+    - Compression speed
+    - Upload progress
+    - Large file handling
+  </Card>
+  
+  <Card title="Network Conditions" icon="signal">
+    Test under poor network
+    
+    - Slow 3G
+    - Offline/online transitions
+    - High latency
+  </Card>
+  
+  <Card title="Multiple Devices" icon="devices">
+    Test with many connected devices
+    
+    - 5+ devices in same session
+    - Sync performance
+    - Realtime lag
+  </Card>
+</CardGroup>
+
+## Submitting Pull Requests
+
+### Before Submitting
+
+<Steps>
+  <Step title="Complete Checklist">
+    - [ ] Code follows style guidelines
+    - [ ] All tests pass
+    - [ ] Linter passes (`npm run lint`)
+    - [ ] Feature works in Chrome, Firefox, Safari
+    - [ ] Mobile responsive
+    - [ ] Dark mode works
+    - [ ] No console errors
+    - [ ] Realtime sync tested
+  </Step>
+  
+  <Step title="Update Documentation">
+    If your feature adds new functionality:
+    - Update README if needed
+    - Add code comments for complex logic
+    - Update this contributing guide if workflow changes
+  </Step>
+  
+  <Step title="Push to Your Fork">
+    ```bash
+    git push origin feature/your-feature-name
+    ```
+  </Step>
+</Steps>
+
+### Creating the Pull Request
+
+<Steps>
+  <Step title="Open PR on GitHub">
+    1. Go to your forked repository
+    2. Click "Compare & pull request"
+    3. Select the base repository and branch
+  </Step>
+  
+  <Step title="Write a Clear Title">
+    **Format:**
+    ```
+    feat: Add search functionality to clipboard history
+    ```
+    
+    **Use prefixes:**
+    - `feat:` - New feature
+    - `fix:` - Bug fix
+    - `docs:` - Documentation
+    - `refactor:` - Code refactoring
+    - `perf:` - Performance improvement
+  </Step>
+  
+  <Step title="Write Detailed Description">
+    **Template:**
+    ```markdown
+    ## Description
+    Brief description of what this PR does.
+    
+    ## Changes
+    - Added search input to clipboard history
+    - Implemented real-time filtering
+    - Added keyboard shortcut (Ctrl+F)
+    
+    ## Screenshots
+    (If UI changes, add before/after screenshots)
+    
+    ## Testing
+    - [ ] Tested in Chrome, Firefox, Safari
+    - [ ] Mobile responsive
+    - [ ] Works with 100+ items
+    - [ ] Dark mode support
+    
+    ## Related Issues
+    Closes #123
+    ```
+  </Step>
+  
+  <Step title="Request Review">
+    Tag relevant maintainers for review
+  </Step>
+</Steps>
+
+### After Submitting
+
+<Tabs>
+  <Tab title="Respond to Feedback">
+    - Check for review comments
+    - Address requested changes promptly
+    - Push additional commits to the same branch
+    - Be respectful and open to suggestions
+  </Tab>
+  
+  <Tab title="CI/CD Checks">
+    If the project has CI/CD:
+    - Ensure all checks pass
+    - Fix any failing tests
+    - Resolve linting errors
+  </Tab>
+  
+  <Tab title="Keep Updated">
+    If the main branch advances:
+    ```bash
+    git fetch upstream
+    git rebase upstream/main
+    git push --force-with-lease
+    ```
+  </Tab>
+</Tabs>
+
+## Code Review Guidelines
+
+### For Reviewers
+
+<AccordionGroup>
+  <Accordion title="What to Look For" icon="magnifying-glass">
+    - Code follows style guidelines
+    - No obvious bugs or edge cases
+    - Error handling is present
+    - Performance considerations
+    - Security concerns (especially with file uploads)
+    - Accessibility issues
+  </Accordion>
+  
+  <Accordion title="Providing Feedback" icon="comments">
+    **Be constructive:**
+    - Explain why something should change
+    - Suggest alternatives
+    - Distinguish between required changes and suggestions
+    
+    **Example:**
+    ```
+    ❌ "This code is bad."
+    
+    ✅ "Consider using async/await here instead of .then() 
+       for consistency with the rest of the codebase. 
+       See src/App.jsx:140 for examples."
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### For Contributors
+
+<Info>
+**Responding to reviews:**
+- Thank reviewers for their time
+- Ask questions if feedback is unclear
+- Don't take criticism personally
+- Mark conversations as resolved after addressing
+</Info>
+
+## Common Contribution Areas
+
+### Good First Issues
+
+<CardGroup cols={2}>
+  <Card title="UI Improvements" icon="palette">
+    - Add animations
+    - Improve mobile layout
+    - Enhance dark mode colors
+    - Better loading states
+  </Card>
+  
+  <Card title="Feature Enhancements" icon="sparkles">
+    - Add keyboard shortcuts
+    - Implement drag-and-drop
+    - Add more file type support
+    - Enhanced search (regex, filters)
+  </Card>
+  
+  <Card title="Bug Fixes" icon="bug">
+    - Fix edge cases
+    - Improve error messages
+    - Handle race conditions
+    - Memory leak fixes
+  </Card>
+  
+  <Card title="Documentation" icon="book">
+    - Improve code comments
+    - Add setup tutorials
+    - Create video guides
+    - Translate to other languages
+  </Card>
+</CardGroup>
+
+### Areas Needing Help
+
+<Tabs>
+  <Tab title="Testing">
+    - Add unit tests (React Testing Library)
+    - E2E tests (Playwright/Cypress)
+    - Performance benchmarks
+    - Accessibility audits
+  </Tab>
+  
+  <Tab title="Authentication">
+    - Implement user authentication
+    - Secure session codes
+    - Private sessions
+    - User profiles
+  </Tab>
+  
+  <Tab title="Features">
+    - Rich text support
+    - Code syntax highlighting
+    - Clipboard history export
+    - Browser extension
+  </Tab>
+</Tabs>
+
+## Getting Help
+
+<CardGroup cols={2}>
+  <Card title="Discord" icon="discord">
+    Join our Discord server for real-time help and discussions
+  </Card>
+  
+  <Card title="GitHub Discussions" icon="github">
+    Ask questions and share ideas in GitHub Discussions
+  </Card>
+  
+  <Card title="Issue Tracker" icon="circle-exclamation">
+    Report bugs or request features via GitHub Issues
+  </Card>
+  
+  <Card title="Email" icon="envelope">
+    Contact maintainers directly for sensitive topics
+  </Card>
+</CardGroup>
+
+## Code of Conduct
+
+### Our Pledge
+
+We are committed to providing a welcoming and inclusive environment for all contributors.
+
+<Tabs>
+  <Tab title="Expected Behavior">
+    - Be respectful and inclusive
+    - Accept constructive criticism gracefully
+    - Focus on what's best for the community
+    - Show empathy towards others
+  </Tab>
+  
+  <Tab title="Unacceptable Behavior">
+    - Harassment or discriminatory language
+    - Trolling or insulting comments
+    - Personal or political attacks
+    - Publishing others' private information
+  </Tab>
+</Tabs>
+
+## Recognition
+
+All contributors will be:
+- Added to CONTRIBUTORS.md
+- Mentioned in release notes
+- Given credit in the README
+- Featured on our website (if applicable)
+
+<Info>
+Thank you for contributing to ClipSync! Your efforts help make this project better for everyone.
+</Info>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Local Setup" icon="laptop-code" href="/development/local-setup">
+    Get your development environment ready
+  </Card>
+  
+  <Card title="Architecture" icon="sitemap" href="/development/architecture">
+    Understand how ClipSync works
+  </Card>
+  
+  <Card title="Tech Stack" icon="layer-group" href="/development/tech-stack">
+    Learn about the technologies used
+  </Card>
+</CardGroup>

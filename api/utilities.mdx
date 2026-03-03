@@ -1,0 +1,154 @@
+---
+title: Utilities
+description: API reference for utility functions and helpers
+---
+
+Utility functions provide common functionality used throughout ClipSync, including text processing and content formatting.
+
+## convertLinksToAnchor
+
+Converts URL strings in plain text to clickable HTML anchor tags, with support for sensitive content masking.
+
+**Source:** `src/utils/index.js:1`
+
+```javascript
+export const convertLinksToAnchor = (text, item) => {
+    if(item.sensitive) {
+        return "**********************";
+    }
+    const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
+    return text.replace(urlRegex, (url) => {
+        let hyperlink = url.startsWith("www.") ? `https://${url}` : url;
+        return `<a href="${hyperlink}" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline">${url}</a>`;
+    });
+};
+```
+
+### Parameters
+
+<ParamField path="text" type="string" required>
+  The text content to process for URL conversion.
+</ParamField>
+
+<ParamField path="item" type="object" required>
+  The clipboard item object containing metadata.
+  
+  **Properties:**
+  - `sensitive` (boolean): Flag indicating whether content should be hidden
+</ParamField>
+
+### Return Type
+
+```typescript
+string
+```
+
+Returns an HTML string with URLs converted to anchor tags, or masked content if sensitive.
+
+### URL Pattern Matching
+
+The function matches URLs using the following regex pattern:
+
+```javascript
+/(https?:\/\/[^\s]+|www\.[^\s]+)/g
+```
+
+This matches:
+- **HTTP/HTTPS URLs**: `http://example.com` or `https://example.com`
+- **www URLs**: `www.example.com` (automatically prepends `https://`)
+- Stops at whitespace characters
+
+### Link Attributes
+
+Generated anchor tags include:
+
+<ResponseField name="href" type="string">
+  The URL to link to. Automatically adds `https://` prefix for `www.` URLs.
+</ResponseField>
+
+<ResponseField name="target" type="string" value="_blank">
+  Opens links in a new browser tab.
+</ResponseField>
+
+<ResponseField name="rel" type="string" value="noopener noreferrer">
+  Security attributes to prevent tab-nabbing and referrer leakage.
+</ResponseField>
+
+<ResponseField name="class" type="string" value="text-blue-500 underline">
+  Tailwind CSS classes for styling (blue color with underline).
+</ResponseField>
+
+### Sensitive Content Handling
+
+When `item.sensitive` is `true`, the function returns a masked string instead of the actual content:
+
+```javascript
+"**********************"
+```
+
+This prevents sensitive information like passwords, API keys, or personal data from being displayed in the UI.
+
+### Usage Example
+
+```javascript
+import { convertLinksToAnchor } from "./utils";
+
+const clipboardItem = {
+  content: "Check out https://example.com and www.github.com",
+  sensitive: false
+};
+
+const html = convertLinksToAnchor(
+  clipboardItem.content, 
+  clipboardItem
+);
+
+// Result:
+// Check out <a href="https://example.com" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline">https://example.com</a> and <a href="https://www.github.com" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline">www.github.com</a>
+```
+
+### Example with Sensitive Content
+
+```javascript
+const sensitiveItem = {
+  content: "Password: mySecretPass123",
+  sensitive: true
+};
+
+const html = convertLinksToAnchor(
+  sensitiveItem.content,
+  sensitiveItem
+);
+
+// Result:
+// "**********************"
+```
+
+### Rendering in React
+
+The function returns HTML strings that should be rendered using `dangerouslySetInnerHTML`:
+
+```jsx
+<p
+  dangerouslySetInnerHTML={{
+    __html: convertLinksToAnchor(item.content, item)
+  }}
+/>
+```
+
+### Security Considerations
+
+1. **XSS Prevention**: The function does not sanitize HTML in the input text. Ensure text content is from trusted sources or sanitize before passing to this function.
+
+2. **Link Security**: Generated links include `rel="noopener noreferrer"` to prevent:
+   - **Tab-nabbing**: Malicious sites accessing the parent window
+   - **Referrer leakage**: Hiding the referring URL from the target site
+
+3. **Sensitive Data**: Always set `sensitive: true` for clipboard items containing passwords, tokens, or personal information.
+
+### Limitations
+
+- Does not handle URLs with whitespace (will break at spaces)
+- Does not validate URL structure (may match invalid URLs)
+- Cannot handle URLs in existing HTML content (will double-convert)
+- Limited to HTTP/HTTPS and www. URLs (no support for ftp://, mailto:, etc.)

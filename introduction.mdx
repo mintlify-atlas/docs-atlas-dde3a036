@@ -1,0 +1,87 @@
+---
+title: Introduction
+description: ClipSync is a Progressive Web App for syncing clipboard content across multiple devices in real-time
+---
+
+# Welcome to ClipSync
+
+ClipSync is a powerful Progressive Web App (PWA) that enables seamless clipboard synchronization across multiple devices in real-time. Built with React and Supabase, ClipSync makes it easy to share text, files, and images between your devices instantly.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Real-time Sync" icon="arrows-rotate">
+    Clipboard content syncs instantly across all connected devices using Supabase real-time subscriptions
+  </Card>
+  
+  <Card title="Session-based Connection" icon="link">
+    Create or join sessions using simple 5-character codes. No accounts required
+  </Card>
+  
+  <Card title="File Sharing" icon="file-arrow-up">
+    Share files up to 10MB including documents, images, and PDFs. Images are automatically compressed
+  </Card>
+  
+  <Card title="PWA with Offline Support" icon="wifi">
+    Install as a native app and access your clipboard history even when offline
+  </Card>
+  
+  <Card title="Search and History" icon="clock-rotate-left">
+    Search through your clipboard history and access previously synced items
+  </Card>
+  
+  <Card title="Dark Mode" icon="moon">
+    Built-in dark mode with automatic system preference detection
+  </Card>
+  
+  <Card title="Sensitive Content Masking" icon="eye-slash">
+    Mark clipboard items as sensitive to mask their content in the history view
+  </Card>
+  
+  <Card title="Cross-Platform" icon="mobile">
+    Works on desktop, mobile, and tablet devices with responsive design
+  </Card>
+</CardGroup>
+
+## How It Works
+
+ClipSync uses a session-based architecture where:
+
+1. **Sessions** are created with unique 5-character codes generated from alphanumeric characters
+2. **Real-time sync** is powered by Supabase PostgreSQL changes streaming
+3. **File storage** utilizes Supabase Storage with automatic image compression
+4. **Offline support** is enabled through service workers and PWA capabilities
+
+## Quick Links
+
+<CardGroup cols={3}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get started using ClipSync in minutes
+  </Card>
+  
+  <Card title="Installation" icon="code" href="/installation">
+    Set up the development environment
+  </Card>
+  
+  <Card title="Live App" icon="globe" href="https://clipsync.pages.dev/">
+    Try ClipSync now
+  </Card>
+</CardGroup>
+
+## Technical Stack
+
+- **Frontend**: React 19 with Vite
+- **Styling**: Tailwind CSS
+- **Backend**: Supabase (PostgreSQL + Storage + Real-time)
+- **State Management**: TanStack Query (React Query)
+- **UI Components**: Lucide React icons
+- **PWA**: vite-plugin-pwa with Workbox
+- **Image Compression**: browser-image-compression
+
+## Use Cases
+
+- Share code snippets between your development machines
+- Transfer files from desktop to mobile quickly
+- Sync passwords and credentials securely (with sensitive content masking)
+- Share URLs and notes across devices
+- Collaborate by sharing clipboard content with team members

@@ -1,0 +1,292 @@
+---
+title: Clipboard Operations
+description: API reference for clipboard management and real-time sync operations
+---
+
+Clipboard operations handle reading, writing, and syncing clipboard content across devices. These functions manage the core functionality of ClipSync.
+
+## updateClipboard
+
+Updates the clipboard content and syncs it to all devices in the session.
+
+**Source:** `src/App.jsx:167`
+
+```javascript
+const updateClipboard = async () => {
+    if (!clipboard && !fileUrl) return toast.error("Please enter some text to update clipboard");
+    if (clipboard.length > 15000) return toast.error("Clipboard content is too long. Please keep it under 15000 characters.");
+
+    let firstTime = false;
+
+    if (!sessionCode) {
+        await createSession(setSessionCode);
+        firstTime = true;
+    }
+    const code = localStorage.getItem("sessionCode");
+    await supabase.from("clipboard").insert([{
+        session_code: code,
+        content: clipboard,
+        fileUrl: fileUrl ? fileUrl.url : null,
+        file: fileUrl ? fileUrl : null,
+        sensitive: isSensitive,
+    }]);
+
+    if (history.length == 0 && firstTime) {
+        const { data, error: fetchError } = await supabase
+            .from("clipboard")
+            .select("*")
+            .eq("session_code", code)
+            .order("created_at", { ascending: false });
+
+        if (!fetchError) {
+            setHistory(data);
+        }
+    }
+
+    setFileUrl(null);
+    setClipboard("");
+    sessionStorage.removeItem("clipboard");
+    setIsSensitive(false);
+    toast.success("Clipboard updated successfully!");
+};
+```
+
+### Parameters
+
+This function uses component state rather than direct parameters:
+
+<ParamField path="clipboard" type="string">
+  The text content to be synced. Maximum length of 15,000 characters.
+</ParamField>
+
+<ParamField path="fileUrl" type="object | null">
+  Optional file attachment object containing `url`, `path`, `name`, and `type` properties.
+</ParamField>
+
+<ParamField path="isSensitive" type="boolean">
+  Flag indicating whether the content contains sensitive information that should be hidden.
+</ParamField>
+
+### Behavior
+
+1. Validates that either text or file content exists
+2. Checks content length (15,000 character limit)
+3. Creates a new session if one doesn't exist
+4. Inserts clipboard data into the database
+5. Clears the input fields and resets state
+
+---
+
+## fetchClipboardHistory
+
+Retrieves all clipboard entries for the current session.
+
+**Source:** `src/App.jsx:31`
+
+```javascript
+const fetchClipboardHistory = async () => {
+    if (!sessionCode) return;
+    let { data, error } = await supabase
+        .from("clipboard")
+        .select("*")
+        .eq("session_code", sessionCode);
+    if (!error) setClipboard(data || []);
+};
+```
+
+### Parameters
+
+<ParamField path="sessionCode" type="string" required>
+  The session code to fetch clipboard history for (from component state).
+</ParamField>
+
+### Return Value
+
+Returns `Promise<void>`. Updates component state with the fetched clipboard history.
+
+---
+
+## copyToClipboard
+
+Copies text content to the system clipboard.
+
+**Source:** `src/App.jsx:207`
+
+```javascript
+const copyToClipboard = (content) => {
+    navigator.clipboard.writeText(content);
+    toast.success("Text copied to clipboard!");
+};
+```
+
+### Parameters
+
+<ParamField path="content" type="string" required>
+  The text content to copy to the system clipboard.
+</ParamField>
+
+### Behavior
+
+Uses the browser's Clipboard API (`navigator.clipboard.writeText`) to write content to the system clipboard and displays a success notification.
+
+---
+
+## addClipboardText
+
+Reads text from the system clipboard and adds it to the input field.
+
+**Source:** `src/App.jsx:212`
+
+```javascript
+const addClipboardText = () => {
+    navigator.clipboard.readText().then((text) => {
+        if (text.trim()) {
+            setClipboard(text);
+            toast.success("Clipboard text pasted successfully!");
+        } else {
+            alert("Clipboard is empty or contains unsupported data.");
+        }
+    }).catch(() => {
+        alert("An error occurred while reading clipboard");
+    });
+};
+```
+
+### Behavior
+
+1. Requests clipboard read permission from the browser
+2. Reads text content from the system clipboard
+3. Updates the input field with the clipboard text
+4. Shows appropriate success or error messages
+
+### Browser Permissions
+
+Requires the `clipboard-read` permission. Users may be prompted to grant permission on first use.
+
+---
+
+## deleteAll
+
+Deletes all clipboard entries for the current session, including associated files.
+
+**Source:** `src/App.jsx:225`
+
+```javascript
+const deleteAll = async () => {
+    const response = confirm("Are you sure you want to clear clipboards?");
+    if (!response) return;
+    if (history.length == 0) return toast.error("No items in your clipboard history");
+    
+    history.forEach(async (item) => {
+        if (item.file) {
+            await supabase.storage.from("clipboard").remove([item.file.name]);
+        }
+    });
+
+    const { error } = await supabase.from("clipboard").delete().eq("session_code", sessionCode);
+    if (error) {
+        toast.error("An error occurred while deleting clipboard history");
+        return;
+    }
+    setHistory([]);
+    toast.success("Clipboard history deleted successfully!");
+};
+```
+
+### Behavior
+
+1. Shows a confirmation dialog to the user
+2. Iterates through all history items and deletes associated files from storage
+3. Deletes all database records for the current session
+4. Clears the local history state
+
+---
+
+## handleEdit
+
+Loads a clipboard entry into the editor for modification.
+
+**Source:** `src/App.jsx:249`
+
+```javascript
+const handleEdit = async (id) => {
+    setDeleteOne(true);
+    const content = history.find((item) => item.id === id).content;
+    setClipboard(content);
+    await supabase.from("clipboard").delete().eq("id", id);
+
+    setFileUrl(history.find((item) => item.id === id).file);
+
+    const newHistory = history.filter((item) => item.id !== id);
+    setHistory(newHistory);
+    setDeleteOne(false);
+
+    toast.success("Clipboard content added to editor!");
+}
+```
+
+### Parameters
+
+<ParamField path="id" type="number" required>
+  The unique identifier of the clipboard entry to edit.
+</ParamField>
+
+### Behavior
+
+1. Finds the entry in the history by ID
+2. Loads the content and file (if any) into the editor
+3. Deletes the entry from the database
+4. Updates the local history state
+5. Allows the user to modify and re-save the content
+
+---
+
+## Real-time Subscription
+
+ClipSync uses Supabase's real-time features to sync clipboard updates across devices.
+
+**Source:** `src/App.jsx:385`
+
+```javascript
+useEffect(() => {
+    if (!sessionCode) return;
+    const channel = supabase
+        .channel("clipboard")
+        .on("postgres_changes", { 
+            event: "*", 
+            schema: "public", 
+            table: "clipboard" 
+        }, (payload) => {
+            if (payload.new.session_code === sessionCode && payload.eventType === "INSERT") {
+                setHistory((prev) => [payload.new, ...prev]);
+                setClipboard("");
+            }
+
+            if (payload.eventType === "DELETE") {
+                if (deleteOne) {
+                    setHistory([]);
+                } else {
+                    setHistory((prev) => prev.filter((item) => item.id !== payload.old.id));
+                }
+            }
+        })
+        .subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    };
+}, [sessionCode, isOffline]);
+```
+
+### Behavior
+
+- **INSERT events**: Adds new clipboard entries to the history in real-time
+- **DELETE events**: Removes deleted entries from the history
+- **Session filtering**: Only processes events matching the current session code
+- **Cleanup**: Unsubscribes from the channel when the component unmounts
+
+### Event Types
+
+- `INSERT`: New clipboard content added
+- `DELETE`: Clipboard content removed
+- Automatically syncs across all connected devices in the session

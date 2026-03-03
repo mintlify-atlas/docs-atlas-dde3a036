@@ -1,0 +1,319 @@
+---
+title: File Sharing
+description: Upload and share files across devices with automatic image compression and support for various file types.
+---
+
+## Overview
+
+ClipSync allows you to share files alongside text content. Files are uploaded to Supabase Storage and linked to your clipboard entries, making them accessible across all devices in your session.
+
+## Supported File Types
+
+ClipSync supports a wide range of file formats:
+
+- **Images**: `image/*` (all image formats)
+- **Documents**: 
+  - Microsoft Word: `application/msword`
+  - Microsoft Excel: `application/vnd.ms-excel`
+  - Microsoft PowerPoint: `application/vnd.ms-powerpoint`
+  - PDF: `application/pdf`
+  - Plain Text: `text/plain`
+
+From App.jsx:540-547:
+
+```javascript src/App.jsx:540-547
+<input 
+    type="file" 
+    className="hidden" 
+    id="attachfile" 
+    accept="application/msword, application/vnd.ms-excel, application/vnd.ms-powerpoint,
+        text/plain, application/pdf, image/*" 
+    onChange={async (e) => {
+        const file = e.target.files[0];
+        await UploadFile(file);
+        e.target.value = null;
+    }} 
+/>
+```
+
+## File Size Limits
+
+Files must be **under 10MB** to be uploaded:
+
+```javascript src/App.jsx:124-127
+// Check file size
+if (file.size > 10 * 1024 * 1024) {
+    return toast.error("File size exceeds 10MB. Please upload a smaller file.");
+}
+```
+
+<Warning>
+Files larger than 10MB will be rejected. Consider compressing large files or using a dedicated file transfer service for larger files.
+</Warning>
+
+## Image Compression
+
+ClipSync automatically compresses images before uploading to save bandwidth and storage space.
+
+### Compression Library
+
+ClipSync uses the `browser-image-compression` library:
+
+```javascript src/compressedFileUpload.jsx:1-17
+import imageCompression from "browser-image-compression";
+
+export async function compressImage(imageFile, maxSizeMB = 0.2, maxWidthOrHeight = 1920, useWebWorker = true) {
+    const options = {
+        maxSizeMB,
+        maxWidthOrHeight,
+        useWebWorker,
+    }
+
+    try {
+        const compressedFile = await imageCompression(imageFile, options);
+        const newFile = new File([compressedFile], imageFile.name, { 
+            lastModified: new Date(), 
+            size: imageFile.size, 
+            type: imageFile.type 
+        });
+        return newFile;
+    } catch (error) {
+        throw new Error(error.message);
+    }
+}
+```
+
+### Compression Settings
+
+- **Maximum file size**: 0.2MB (200KB) after compression
+- **Maximum dimensions**: 1920px (width or height)
+- **Web Worker**: Enabled for better performance
+
+### Automatic Compression
+
+Images are automatically compressed during upload:
+
+```javascript src/App.jsx:139-147
+// Compress image if it is an image
+if (file.type.includes("image")) {
+    try {
+        const compressedFile = await compressImage(file);
+        file = compressedFile;
+    } catch (error) {
+        return toast.error("An error occurred while compressing image");
+    }
+}
+```
+
+<Info>
+Compression is only applied to image files. Documents and other file types are uploaded as-is (within the 10MB limit).
+</Info>
+
+## Attaching Files vs Images
+
+ClipSync provides two separate upload buttons for better organization:
+
+### Attach File Button
+
+For documents and general files:
+
+```javascript src/App.jsx:549-551
+<label htmlFor="attachfile" className="flex w-fit items-center gap-2 cursor-pointer">
+    <Paperclip className="text-green-500" size={18} /> Attach File
+</label>
+```
+
+### Attach Image Button
+
+Specifically for image files:
+
+```javascript src/App.jsx:553-564
+<input 
+    type="file" 
+    className="hidden" 
+    id="attachimage" 
+    accept="image/*" 
+    onChange={async (e) => {
+        const file = e.target.files[0];
+        await UploadFile(file, "image");
+        e.target.value = null;
+    }} 
+/>
+
+<label htmlFor="attachimage" className="flex w-fit items-center gap-2 cursor-pointer">
+    <FileImage className="text-rose-500" size={18} /> Attach Image
+</label>
+```
+
+<Tip>
+Use "Attach Image" for photos and graphics - they'll be compressed automatically. Use "Attach File" for documents that shouldn't be compressed.
+</Tip>
+
+## File Upload Process
+
+The complete file upload flow:
+
+```javascript src/App.jsx:121-165
+const UploadFile = async (file, type = "file") => {
+    if (!file) return toast.error("Please select a file to upload");
+
+    // Check file size
+    if (file.size > 10 * 1024 * 1024) {
+        return toast.error("File size exceeds 10MB. Please upload a smaller file.");
+    }
+
+    // Generate 3 random characters
+    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let random = "";
+    for (let i = 0; i < 3; i++) {
+        random += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+
+    // Show loading toast
+    const toastId = toast.loading("Uploading file...");
+
+    // Compress image if it is an image
+    if (file.type.includes("image")) {
+        try {
+            const compressedFile = await compressImage(file);
+            file = compressedFile;
+        } catch (error) {
+            return toast.error("An error occurred while compressing image");
+        }
+    }
+
+    try {
+        // Upload file to Supabase Storage
+        const { data, error } = await supabase.storage
+            .from("clipboard")
+            .upload(`files/${random + file.name}`, file);
+
+        if (error) throw error;
+
+        // Get the URL of the uploaded file
+        const url = `https://qthpintkaihcmklahkwf.supabase.co/storage/v1/object/public/${data.fullPath}`;
+        setFileUrl({ url, ...data, type });
+
+        // Update toast to success
+        toast.success("File uploaded successfully!", { id: toastId });
+    } catch (error) {
+        // Update toast to error
+        toast.error("An error occurred while uploading file", { id: toastId });
+    }
+};
+```
+
+### Key Features
+
+1. **Random prefix**: 3-character random string added to filename to prevent collisions
+2. **Loading feedback**: Toast notification shows upload progress
+3. **Error handling**: Comprehensive error messages for various failure scenarios
+4. **Type tracking**: Files tagged as "file" or "image" for proper display
+
+## Storage in Supabase
+
+Files are stored in Supabase Storage under the `clipboard` bucket:
+
+### Storage Path
+
+```javascript src/App.jsx:151
+const { data, error } = await supabase.storage
+    .from("clipboard")
+    .upload(`files/${random + file.name}`, file);
+```
+
+All files are stored in the `files/` directory with a 3-character random prefix.
+
+### Public URL Generation
+
+```javascript src/App.jsx:156
+const url = `https://qthpintkaihcmklahkwf.supabase.co/storage/v1/object/public/${data.fullPath}`;
+```
+
+Files are accessible via public URLs, allowing all devices in the session to download them.
+
+### File Metadata
+
+File information is stored in the clipboard entry:
+
+```javascript src/App.jsx:179-184
+await supabase.from("clipboard").insert([{
+    session_code: code,
+    content: clipboard,
+    fileUrl: fileUrl ? fileUrl.url : null,
+    file: fileUrl ? fileUrl : null,
+    sensitive: isSensitive,
+}]);
+```
+
+## File Preview
+
+Attached files are shown before sending:
+
+```javascript src/App.jsx:589-602
+{fileUrl &&
+    <div className="flex gap-2 items-center p-2 py-1.5 rounded-lg">
+        <FileUp size={18} className="text-blue-500" />
+        <p className="flex-1 truncate text-sm">{fileUrl.path}</p>
+        <button className="text-red-500 active:text-red-700 active:scale-95" onClick={() => {
+            // delete file from storage
+            supabase.storage.from("clipboard").remove([fileUrl.name]);
+            setFileUrl(null);
+
+            toast.success("File removed successfully!");
+        }}>
+            <Trash2 size={19} />
+        </button>
+    </div>
+}
+```
+
+You can remove the file before sending if you change your mind.
+
+## Viewing Files in History
+
+Files appear in clipboard history with appropriate icons and download links:
+
+```javascript src/App.jsx:659-674
+{item.file && 
+    <div className="border flex items-center gap-1 rounded px-1 mt-3">
+        <div>
+            {item.file && item.file.type === "file" 
+                ? <Paperclip size={16} className="text-green-500" /> 
+                : <FileImage size={16} className="text-rose-500" />
+            }
+        </div>
+        <div>
+            {item.file && 
+                <a href={item.fileUrl}
+                    className="text-blue-500 text-sm hover:underline truncate"
+                    target="_blank"
+                    rel="noreferrer">
+                    {item.file.path.length > 34 
+                        ? item.file.path.substring(6, 10) + "..." + item.file.path.substring(item.file.path.length - 7) 
+                        : item.file.path.substring(6)
+                    }
+                </a>
+            }
+        </div>
+    </div>
+}
+```
+
+<Info>
+Long filenames are automatically truncated for better display while preserving the file extension.
+</Info>
+
+## File Deletion
+
+When you delete a clipboard entry with an attached file, the file is also removed from storage:
+
+```javascript src/App.jsx:230-234
+history.forEach(async (item) => {
+    if (item.file) {
+        await supabase.storage.from("clipboard").remove([item.file.name]);
+    }
+});
+```
+
+This ensures storage doesn't fill up with orphaned files.

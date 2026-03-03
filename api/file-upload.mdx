@@ -1,0 +1,243 @@
+---
+title: File Upload
+description: API reference for file upload and image compression functionality
+---
+
+File upload operations handle uploading files and images to ClipSync with automatic image compression and size validation.
+
+## UploadFile
+
+Uploads a file to Supabase Storage with validation and optional image compression.
+
+**Source:** `src/App.jsx:121`
+
+```javascript
+const UploadFile = async (file, type = "file") => {
+    if (!file) return toast.error("Please select a file to upload");
+
+    // Check file size
+    if (file.size > 10 * 1024 * 1024) {
+        return toast.error("File size exceeds 10MB. Please upload a smaller file.");
+    }
+
+    // Generate 3 random characters
+    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let random = "";
+    for (let i = 0; i < 3; i++) {
+        random += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+
+    // Show loading toast
+    const toastId = toast.loading("Uploading file...");
+
+    // Compress image if it is an image
+    if (file.type.includes("image")) {
+        try {
+            const compressedFile = await compressImage(file);
+            file = compressedFile;
+        } catch (error) {
+            return toast.error("An error occurred while compressing image");
+        }
+    }
+
+    try {
+        // Upload file to Supabase Storage
+        const { data, error } = await supabase.storage
+            .from("clipboard")
+            .upload(`files/${random + file.name}`, file);
+
+        if (error) throw error;
+
+        // Get the URL of the uploaded file
+        const url = `https://qthpintkaihcmklahkwf.supabase.co/storage/v1/object/public/${data.fullPath}`;
+        setFileUrl({ url, ...data, type });
+
+        // Update toast to success
+        toast.success("File uploaded successfully!", { id: toastId });
+    } catch (error) {
+        // Update toast to error
+        toast.error("An error occurred while uploading file", { id: toastId });
+    }
+};
+```
+
+### Parameters
+
+<ParamField path="file" type="File" required>
+  The File object to upload. Must be obtained from an HTML file input element.
+</ParamField>
+
+<ParamField path="type" type="string" default="file">
+  The type of file being uploaded. Can be:
+  - `"file"` - General file upload (documents, PDFs, etc.)
+  - `"image"` - Image file (triggers compression)
+</ParamField>
+
+### File Size Validation
+
+The function enforces a maximum file size of **10MB** (10 * 1024 * 1024 bytes). Files exceeding this limit are rejected with an error message.
+
+### Storage Path
+
+Files are uploaded to Supabase Storage with the following path structure:
+
+```
+clipboard/files/{RANDOM_CODE}{ORIGINAL_FILENAME}
+```
+
+Where:
+- `clipboard` is the storage bucket name
+- `files/` is the subdirectory
+- `{RANDOM_CODE}` is a 3-character alphanumeric prefix to prevent name collisions
+- `{ORIGINAL_FILENAME}` is the original name of the uploaded file
+
+### Image Compression
+
+When the uploaded file's MIME type includes `"image"`, the function automatically compresses it using the `compressImage` function before uploading.
+
+### Return Value
+
+Returns `Promise<void>`. On success, updates component state with the file URL and metadata:
+
+```javascript
+{
+  url: string,           // Public URL of the uploaded file
+  fullPath: string,      // Storage path
+  name: string,          // Filename with random prefix
+  type: string,          // "file" or "image"
+  // ...other Supabase storage metadata
+}
+```
+
+### Accepted File Types
+
+The application accepts the following file types:
+
+- **Documents**: `.doc`, `.docx` (Microsoft Word)
+- **Spreadsheets**: `.xls`, `.xlsx` (Microsoft Excel)
+- **Presentations**: `.ppt`, `.pptx` (Microsoft PowerPoint)
+- **PDF**: `.pdf`
+- **Text**: `.txt`
+- **Images**: All image formats (`image/*`)
+
+### Usage Example
+
+```jsx
+<input 
+  type="file" 
+  accept="image/*" 
+  onChange={async (e) => {
+    const file = e.target.files[0];
+    await UploadFile(file, "image");
+    e.target.value = null; // Clear input
+  }} 
+/>
+```
+
+---
+
+## compressImage
+
+Compresses an image file to reduce its size while maintaining reasonable quality.
+
+**Source:** `src/compressedFileUpload.jsx:3`
+
+```javascript
+export async function compressImage(
+    imageFile, 
+    maxSizeMB = 0.2, 
+    maxWidthOrHeight = 1920, 
+    useWebWorker = true
+) {
+    const options = {
+        maxSizeMB,
+        maxWidthOrHeight,
+        useWebWorker,
+    }
+
+    try {
+        const compressedFile = await imageCompression(imageFile, options);
+        const newFile = new File(
+            [compressedFile], 
+            imageFile.name, 
+            { 
+                lastModified: new Date(), 
+                size: imageFile.size, 
+                type: imageFile.type 
+            }
+        );
+        return newFile;
+    } catch (error) {
+        throw new Error(error.message);
+    }
+}
+```
+
+### Parameters
+
+<ParamField path="imageFile" type="File" required>
+  The image File object to compress.
+</ParamField>
+
+<ParamField path="maxSizeMB" type="number" default={0.2}>
+  Maximum file size in megabytes after compression. Default is 0.2 MB (200 KB).
+</ParamField>
+
+<ParamField path="maxWidthOrHeight" type="number" default={1920}>
+  Maximum width or height in pixels. The image will be scaled down proportionally if it exceeds this dimension.
+</ParamField>
+
+<ParamField path="useWebWorker" type="boolean" default={true}>
+  Whether to use a Web Worker for compression to avoid blocking the main thread. Recommended to keep as `true` for better performance.
+</ParamField>
+
+### Compression Options
+
+The function uses the `browser-image-compression` library with the following defaults:
+
+- **Target size**: 200 KB maximum
+- **Max dimensions**: 1920px (width or height)
+- **Web Worker**: Enabled for non-blocking compression
+
+### Return Value
+
+Returns `Promise<File>` - A new File object containing the compressed image with the original filename and MIME type preserved.
+
+### Error Handling
+
+Throws an `Error` if compression fails. The error message from the underlying compression library is preserved.
+
+### Performance Considerations
+
+- Uses Web Workers by default to prevent UI blocking during compression
+- Compression time varies based on original image size and quality
+- Larger images may take several seconds to compress
+
+### Usage Example
+
+```javascript
+import { compressImage } from "./compressedFileUpload";
+
+async function handleImageUpload(imageFile) {
+  try {
+    const compressed = await compressImage(
+      imageFile,
+      0.5,    // 500 KB max
+      2048    // 2K resolution max
+    );
+    console.log("Original size:", imageFile.size);
+    console.log("Compressed size:", compressed.size);
+    return compressed;
+  } catch (error) {
+    console.error("Compression failed:", error);
+  }
+}
+```
+
+### File Metadata
+
+The compressed file preserves:
+- Original filename
+- Original MIME type
+- Updated `lastModified` timestamp (set to compression time)
+- Note: The `size` property in the File constructor uses the original size, but the actual blob size is smaller

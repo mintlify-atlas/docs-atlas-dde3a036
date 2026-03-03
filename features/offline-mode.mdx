@@ -1,0 +1,263 @@
+---
+title: Offline Mode
+description: Learn how ClipSync works offline as a Progressive Web App with service worker caching and online/offline detection.
+---
+
+## Overview
+
+ClipSync is built as a **Progressive Web App (PWA)**, which means it can work partially offline and be installed on your device like a native app. The service worker caches resources for offline access and syncs when you reconnect.
+
+## PWA Configuration
+
+ClipSync uses Vite's PWA plugin to configure the Progressive Web App capabilities.
+
+### Service Worker Setup
+
+From vite.config.js:9-14:
+
+```javascript vite.config.js:9-14
+VitePWA({
+    // add this to cache all the imports
+    registerType: 'autoUpdate',
+    workbox: {
+        globPatterns: ["**/*"],
+    },
+    includeAssets: [
+        "**/*",
+    ],
+    // ...
+})
+```
+
+<Info>
+The `autoUpdate` registration type ensures the service worker automatically updates when new versions are deployed.
+</Info>
+
+### App Manifest
+
+The PWA manifest defines how ClipSync appears when installed:
+
+```javascript vite.config.js:18-49
+manifest: {
+    "name": "ClipSync",
+    "short_name": "ClipSync",
+    "description": "A web app for syncing clipboard across devices.",
+    "icons": [
+        {
+            "src": "/favicon/favicon-96x96.png",
+            "sizes": "96x96",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/favicon/web-app-manifest-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/favicon/web-app-manifest-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ],
+    "start_url": "/",
+    "id": "/",
+    "display": "standalone",
+    "theme_color": "#000000",
+    "background_color": "#000000",
+    "orientation": "portrait",
+    "prefer_related_applications": true
+}
+```
+
+### Manifest Properties
+
+- **Display mode**: `standalone` - Appears as a full-screen app without browser UI
+- **Icons**: Three sizes (96x96, 192x192, 512x512) for different devices
+- **Theme**: Black theme color for consistency with the app design
+- **Orientation**: Portrait mode preferred
+
+## Online/Offline Detection
+
+ClipSync actively monitors your connection status and adapts functionality accordingly.
+
+### Connection State Management
+
+```javascript src/App.jsx:27
+const [isOffline, setIsOffline] = useState(!navigator.onLine);
+```
+
+### Event Listeners
+
+From App.jsx:40-53:
+
+```javascript src/App.jsx:40-53
+useEffect(() => {
+    const handleOnline = () => {
+        setIsOffline(false);
+        setTimeout(fetchClipboardHistory, 100);
+    };
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+        window.removeEventListener("online", handleOffline);
+        window.removeEventListener("offline", handleOffline);
+    };
+}, []);
+```
+
+### Automatic Sync on Reconnection
+
+When you come back online, ClipSync automatically:
+
+1. Updates the offline status
+2. Fetches the latest clipboard history after a 100ms delay
+3. Resumes realtime subscriptions
+
+## Offline Indicator
+
+A prominent banner appears when offline:
+
+```javascript src/App.jsx:474-477
+{isOffline && 
+    <div className="w-fit mx-auto bg-red-100 text-red-700 p-2 py-1 rounded-lg">
+        You are offline. Please connect to the internet to sync clipboard content.
+    </div>
+}
+```
+
+<Warning>
+The offline banner alerts you that synchronization is paused until you reconnect to the internet.
+</Warning>
+
+## What Works Offline vs Online
+
+### Works Offline
+
+<CardGroup cols={2}>
+  <Card title="View UI" icon="eye">
+    Browse the app interface and navigation
+  </Card>
+  <Card title="Read History" icon="clock-rotate-left">
+    View previously synced clipboard entries
+  </Card>
+  <Card title="Type Content" icon="keyboard">
+    Draft content in the textarea (stored in sessionStorage)
+  </Card>
+  <Card title="Search History" icon="magnifying-glass">
+    Filter through cached clipboard history
+  </Card>
+</CardGroup>
+
+### Requires Online Connection
+
+<CardGroup cols={2}>
+  <Card title="Send Content" icon="paper-plane" color="#ea5a0c">
+    Upload new clipboard entries to the database
+  </Card>
+  <Card title="Real-time Sync" icon="arrows-rotate" color="#ea5a0c">
+    Receive updates from other devices
+  </Card>
+  <Card title="File Upload" icon="cloud-arrow-up" color="#ea5a0c">
+    Upload files to Supabase Storage
+  </Card>
+  <Card title="Join Session" icon="right-to-bracket" color="#ea5a0c">
+    Connect to or create new sessions
+  </Card>
+  <Card title="Delete Items" icon="trash" color="#ea5a0c">
+    Remove clipboard entries from the database
+  </Card>
+</CardGroup>
+
+## Service Worker Caching
+
+The service worker caches all app resources for offline access:
+
+### Cache Strategy
+
+```javascript vite.config.js:12-16
+workbox: {
+    globPatterns: ["**/*"],
+},
+includeAssets: [
+    "**/*",
+],
+```
+
+This configuration caches:
+- HTML files
+- JavaScript bundles
+- CSS stylesheets
+- Images and icons
+- Fonts
+
+<Info>
+The `**/*` glob pattern ensures all assets are cached for offline availability.
+</Info>
+
+## Realtime Subscription Behavior
+
+The realtime subscription automatically pauses when offline:
+
+```javascript src/App.jsx:410
+}, [sessionCode, isOffline]);
+```
+
+The subscription hook includes `isOffline` as a dependency, meaning:
+- When offline, the connection is cleaned up
+- When back online, a new subscription is established
+- No wasted resources trying to maintain connections while offline
+
+## SessionStorage for Draft Content
+
+ClipSync uses sessionStorage to preserve your draft content even if the page refreshes:
+
+```javascript src/App.jsx:523-527
+value={clipboard}
+onChange={(e) => {
+    setClipboard(e.target.value);
+    sessionStorage.setItem("clipboard", e.target.value);
+}}
+```
+
+And on page load:
+
+```javascript src/App.jsx:15
+const [clipboard, setClipboard] = useState(sessionStorage.getItem("clipboard") || "");
+```
+
+<Tip>
+Your drafted content persists across page refreshes (but not browser restarts), so you won't lose work if you accidentally reload.
+</Tip>
+
+## Installing as PWA
+
+ClipSync can be installed on your device:
+
+1. Open ClipSync in a supported browser (Chrome, Edge, Safari, Firefox)
+2. Look for the "Install" or "Add to Home Screen" prompt
+3. Click install to add ClipSync to your device
+4. Launch from your home screen or app drawer
+
+### Benefits of Installation
+
+- **Faster loading**: Cached resources load instantly
+- **App-like experience**: Full-screen without browser chrome
+- **Desktop icon**: Quick access from home screen/desktop
+- **Better offline support**: More aggressive caching when installed
+
+## Network State in Supabase
+
+Supabase client operations gracefully handle offline scenarios:
+
+- **Queued requests**: Some operations may queue and retry when online
+- **Error handling**: Database operations fail with clear error messages when offline
+- **Automatic reconnection**: Realtime subscriptions automatically reconnect
+
+<Note>
+While offline, operations that require the database will fail with error messages. These will succeed once you reconnect.
+</Note>

@@ -1,0 +1,395 @@
+---
+title: Installing as a Progressive Web App
+description: Learn how to install ClipSync as a PWA on desktop and mobile devices for a native app experience with offline capabilities
+---
+
+ClipSync is built as a Progressive Web App (PWA), allowing you to install it like a native application on your devices. This guide covers everything you need to know about PWA installation and its benefits.
+
+## What is a Progressive Web App?
+
+A Progressive Web App is a web application that uses modern web capabilities to deliver an app-like experience to users. PWAs can be installed on your device and work offline, providing:
+
+- **Native app experience**: Runs in its own window without browser UI
+- **Home screen access**: Launch from your device's home screen or app drawer
+- **Offline functionality**: Continue using cached features when offline
+- **Automatic updates**: Always get the latest version without manual updates
+- **Cross-platform**: One codebase works on all devices
+
+**Referenced in:** `vite.config.js:9-50`
+
+<Note>
+  ClipSync uses `vite-plugin-pwa` with `registerType: 'autoUpdate'` to automatically update the service worker and cache all application assets (see `vite.config.js:11-14`).
+</Note>
+
+## PWA Manifest Configuration
+
+ClipSync's PWA manifest defines how the app appears when installed:
+
+```json
+{
+  "name": "ClipSync",
+  "short_name": "ClipSync",
+  "description": "A web app for syncing clipboard across devices.",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#000000",
+  "orientation": "portrait"
+}
+```
+
+**Referenced in:** `vite.config.js:18-49`, `public/favicon/manifest.json:1-46`
+
+### Manifest Properties
+
+- **Display mode**: `standalone` - Opens without browser UI, like a native app
+- **Theme color**: `#000000` (black) - Matches the app's dark theme
+- **Orientation**: `portrait` - Optimized for vertical viewing on mobile
+- **Icons**: Three sizes (96x96, 192x192, 512x512) for different platforms
+
+## Installing on Desktop
+
+### Google Chrome / Microsoft Edge / Brave
+
+<Steps>
+  <Step title="Open ClipSync in Browser">
+    Navigate to your ClipSync URL in Chrome, Edge, or Brave browser.
+  </Step>
+
+  <Step title="Look for Install Prompt">
+    You'll see an install icon in the address bar (usually a computer or plus icon).
+    
+    Alternatively, look for a prompt at the bottom of the page saying "Install ClipSync".
+  </Step>
+
+  <Step title="Click Install">
+    Click the install button in the address bar or on the prompt.
+    
+    A confirmation dialog will appear showing:
+    - App name: "ClipSync"
+    - Description: "A web app for syncing clipboard across devices."
+    - What the app can do
+  </Step>
+
+  <Step title="Confirm Installation">
+    Click "Install" in the dialog.
+    
+    ClipSync will open in its own window without browser tabs or address bar.
+  </Step>
+</Steps>
+
+<Tip>
+  You can also install via the browser menu: **Menu (⋮) > Install ClipSync** or **Menu (⋮) > More tools > Create shortcut** (check "Open as window").
+</Tip>
+
+### macOS Safari
+
+<Steps>
+  <Step title="Open in Safari">
+    Navigate to ClipSync in Safari browser.
+  </Step>
+
+  <Step title="Add to Dock">
+    Click **File > Add to Dock** from the menu bar.
+  </Step>
+
+  <Step title="Launch from Dock">
+    ClipSync will appear in your Dock and can be launched like any native app.
+  </Step>
+</Steps>
+
+## Installing on Mobile
+
+### iOS (iPhone/iPad) - Safari
+
+<Steps>
+  <Step title="Open in Safari">
+    Navigate to ClipSync in Safari browser.
+    
+    <Warning>
+      iOS PWA installation only works in Safari. Chrome and other browsers on iOS don't support PWA installation.
+    </Warning>
+  </Step>
+
+  <Step title="Open Share Menu">
+    Tap the Share button (square with arrow pointing up) at the bottom of the screen.
+  </Step>
+
+  <Step title="Add to Home Screen">
+    Scroll down and tap "Add to Home Screen".
+  </Step>
+
+  <Step title="Confirm Name and Add">
+    - App name: "ClipSync" (can be edited)
+    - App icon preview will be shown
+    - Tap "Add" in the top-right corner
+  </Step>
+
+  <Step title="Launch from Home Screen">
+    ClipSync will appear on your home screen with its app icon.
+    
+    Tap it to launch in full-screen mode without Safari UI.
+  </Step>
+</Steps>
+
+### Android - Chrome/Edge/Firefox
+
+<Steps>
+  <Step title="Open in Browser">
+    Navigate to ClipSync in Chrome, Edge, or Firefox.
+  </Step>
+
+  <Step title="Tap Install Prompt">
+    A banner will appear at the bottom of the screen: "Add ClipSync to Home screen"
+    
+    Tap "Install" or "Add".
+  </Step>
+
+  <Step title="Alternative Method">
+    If no prompt appears:
+    1. Tap the browser menu (⋮)
+    2. Select "Install app" or "Add to Home screen"
+    3. Confirm the installation
+  </Step>
+
+  <Step title="Launch from Home Screen or App Drawer">
+    ClipSync will be added to:
+    - Your home screen
+    - App drawer (with other installed apps)
+    
+    It appears as a standalone app and can be found via search.
+  </Step>
+</Steps>
+
+<Note>
+  On Android, PWAs can receive notifications and integrate more deeply with the OS, appearing in settings alongside native apps.
+</Note>
+
+## Benefits of Installing as PWA
+
+### 1. Standalone Window
+
+Runs in its own window without browser tabs, address bar, or other browser UI, providing:
+- More screen space for content
+- Cleaner, app-like interface
+- No accidental tab closures
+- Appears as separate app in task switcher
+
+**Referenced in:** `vite.config.js:44` (display mode set to "standalone")
+
+### 2. Offline Functionality
+
+ClipSync caches all assets for offline access:
+
+```javascript
+workbox: {
+  globPatterns: ["**/*"],
+}
+```
+
+**Referenced in:** `vite.config.js:12-14`
+
+<Tip>
+  The app detects when you go offline and displays a warning: "You are offline. Please connect to the internet to sync clipboard content." (see `src/App.jsx:474-477`)
+</Tip>
+
+What works offline:
+- Viewing the UI and interface
+- Accessing previously loaded content
+- Typing in the clipboard editor
+
+What requires internet:
+- Creating or joining sessions
+- Sending clipboard content
+- Real-time synchronization
+- File uploads
+
+### 3. Fast Loading
+
+All assets are cached after first load:
+- Instant app startup
+- No loading spinners for cached resources
+- Reduced data usage on subsequent visits
+
+**Referenced in:** `vite.config.js:15-17` (includes all assets in cache)
+
+### 4. Home Screen Access
+
+Quick access from home screen or app drawer:
+- No need to open browser and navigate
+- Appears alongside other apps
+- Can be organized in folders
+- Accessible via OS-level search
+
+### 5. Automatic Updates
+
+No manual updates required:
+
+```javascript
+registerType: 'autoUpdate'
+```
+
+**Referenced in:** `vite.config.js:11`
+
+The service worker automatically:
+- Checks for updates in the background
+- Downloads new versions
+- Updates the app on next launch
+- No user intervention needed
+
+### 6. Native-Like Features
+
+- **Splash screen**: Shows app icon while loading (see icon configuration in `vite.config.js:22-40`)
+- **App icons**: Custom icons on home screen and task switcher
+- **Theme integration**: Respects dark mode and theme colors
+- **Share target**: Can receive shared content on Android (with additional configuration)
+
+## App Icons
+
+ClipSync includes three icon sizes optimized for different platforms:
+
+| Size | Purpose | Referenced in |
+|------|---------|---------------|
+| 96x96 | Small icons, notifications | `vite.config.js:24` |
+| 192x192 | Standard home screen icon | `vite.config.js:30` |
+| 512x512 | High-res displays, splash screens (maskable) | `vite.config.js:36` |
+
+**Icon locations:** `/favicon/favicon-96x96.png`, `/favicon/web-app-manifest-192x192.png`, `/favicon/web-app-manifest-512x512.png`
+
+<Note>
+  The 512x512 icon uses `"purpose": "maskable"` to adapt to different device shapes and backgrounds (see `vite.config.js:39`).
+</Note>
+
+## Managing Installed PWA
+
+### Uninstalling on Desktop
+
+**Chrome/Edge/Brave:**
+1. Open ClipSync PWA
+2. Click the menu icon (⋮) in the app window
+3. Select "Uninstall ClipSync"
+
+Or from browser:
+1. Open Chrome settings
+2. Go to Apps > Manage apps
+3. Find ClipSync and click "Uninstall"
+
+**Safari (macOS):**
+1. Right-click ClipSync icon in Dock
+2. Select "Options > Remove from Dock"
+
+### Uninstalling on Mobile
+
+**iOS:**
+1. Long-press ClipSync icon on home screen
+2. Tap "Remove App"
+3. Select "Delete App"
+
+**Android:**
+1. Long-press ClipSync icon
+2. Tap "Uninstall" or drag to "Uninstall" at top of screen
+
+Or via Settings:
+1. Go to Settings > Apps
+2. Find ClipSync
+3. Tap "Uninstall"
+
+## Troubleshooting
+
+### Install Prompt Not Appearing
+
+**Possible reasons:**
+- App is already installed
+- Browser doesn't support PWA (use Chrome, Edge, or Firefox)
+- On iOS, must use Safari browser
+- HTTPS required (PWAs don't work on HTTP except localhost)
+
+**Solution:**
+Use manual installation via browser menu: **Menu (⋮) > Install ClipSync**
+
+### App Not Working Offline
+
+**Check these:**
+- Service worker must be registered (check browser DevTools > Application > Service Workers)
+- Visit the app online first to cache assets
+- Some features require internet (syncing, sessions, uploads)
+
+**Expected behavior:**
+The app shows an offline banner but allows viewing the UI (see `src/App.jsx:27`, `src/App.jsx:40-53`).
+
+### Updates Not Applying
+
+**Service worker caching issue:**
+1. Close all instances of ClipSync
+2. Open browser DevTools > Application > Service Workers
+3. Click "Unregister" for ClipSync service worker
+4. Refresh the page
+5. Service worker will re-register with latest version
+
+### App Icon Not Showing
+
+Ensure icon files exist at:
+- `/favicon/favicon-96x96.png`
+- `/favicon/web-app-manifest-192x192.png`
+- `/favicon/web-app-manifest-512x512.png`
+
+Clear browser cache and reinstall if icons don't update.
+
+## Technical Details
+
+### Service Worker Configuration
+
+ClipSync uses Vite PWA Plugin with Workbox:
+
+```javascript
+VitePWA({
+  registerType: 'autoUpdate',
+  workbox: {
+    globPatterns: ["**/*"],
+  },
+  includeAssets: ["**/*"],
+  manifest: { /* ... */ }
+})
+```
+
+**Referenced in:** `vite.config.js:9-50`
+
+- **Auto-update strategy**: App updates automatically in background
+- **Cache strategy**: Caches all assets (HTML, CSS, JS, images, fonts)
+- **Offline fallback**: Shows cached version when offline
+
+### Manifest Screenshots
+
+The manifest includes app screenshots for enhanced install prompts:
+
+```json
+"screenshots": [
+  {
+    "src": "/screenshots/desktop.png",
+    "sizes": "981x613",
+    "form_factor": "wide"
+  },
+  {
+    "src": "/screenshots/mobile.png",
+    "sizes": "409x885",
+    "form_factor": "narrow"
+  }
+]
+```
+
+**Referenced in:** `public/favicon/manifest.json:25-37`
+
+<Tip>
+  Screenshots appear in the install prompt on supporting platforms (primarily Chrome on Android), giving users a preview before installation.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Multi-Device Sync" icon="arrows-rotate" href="/guides/multi-device-sync">
+    Learn how to sync clipboard across devices
+  </Card>
+  <Card title="Security Best Practices" icon="shield" href="/guides/security">
+    Understand ClipSync's security features
+  </Card>
+</CardGroup>

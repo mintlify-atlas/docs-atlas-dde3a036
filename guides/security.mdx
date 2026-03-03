@@ -1,0 +1,633 @@
+---
+title: Security Considerations
+description: Understanding ClipSync's security model, session code protection, sensitive content handling, data encryption, and best practices for secure clipboard syncing
+---
+
+Security is a critical consideration when syncing clipboard content across devices. This guide explains ClipSync's security architecture, features, and best practices to keep your data safe.
+
+## Security Model Overview
+
+ClipSync uses a session-based security model with the following characteristics:
+
+- **Session isolation**: Each session is identified by a unique 5-character code
+- **No authentication**: Access is controlled solely by knowing the session code
+- **Public database access**: Uses Supabase anonymous key for client-side operations
+- **HTTPS encryption**: All data transmission uses TLS encryption
+- **Client-side compression**: Images compressed locally before upload
+
+<Warning>
+  ClipSync is designed for convenience, not maximum security. Anyone with your session code can access all content in that session. Treat session codes like passwords.
+</Warning>
+
+## Session Code Security
+
+### How Session Codes Work
+
+Session codes are 5-character alphanumeric strings generated client-side:
+
+```javascript
+const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+let newCode = "";
+for (let i = 0; i < 5; i++) {
+  newCode += characters.charAt(Math.floor(Math.random() * characters.length));
+}
+```
+
+**Referenced in:** `src/service/doc.service.js:4-8`
+
+### Code Space and Collision Risk
+
+- **Character set**: 36 characters (26 letters + 10 digits)
+- **Code length**: 5 characters
+- **Total possible codes**: 36^5 = **60,466,176 combinations**
+
+**Collision probability:**
+- With 1,000 active sessions: ~0.0017% chance of collision
+- With 10,000 active sessions: ~0.017% chance of collision
+- With 100,000 active sessions: ~0.17% chance of collision
+
+<Note>
+  The likelihood of randomly guessing an active session code is extremely low, providing practical security through obscurity.
+</Note>
+
+### Session Code Best Practices
+
+<AccordionGroup>
+  <Accordion title="Don't Share Session Codes Publicly">
+    **Risk:** Anyone with your session code can:
+    - View all clipboard history
+    - Add new content
+    - Delete existing content
+    - Upload files
+    
+    **Best practice:**
+    - Share codes only with trusted individuals
+    - Use private communication channels (DM, encrypted chat)
+    - Avoid posting codes on public forums or social media
+  </Accordion>
+
+  <Accordion title="Use Unique Sessions for Different Purposes">
+    **Risk:** Mixing personal and shared content in one session exposes personal data to others.
+    
+    **Best practice:**
+    - Create separate sessions for:
+      - Personal device sync
+      - Team collaboration
+      - Temporary file transfers
+      - Different projects or clients
+  </Accordion>
+
+  <Accordion title="Delete Sessions After Use">
+    **Risk:** Old sessions remain accessible indefinitely if session code is known.
+    
+    **Best practice:**
+    - Clear clipboard history when done with temporary sessions
+    - Leave sessions you no longer need
+    - Don't reuse old session codes for new purposes
+    
+    **Referenced in:** `src/App.jsx:225-243` (delete all feature)
+  </Accordion>
+
+  <Accordion title="Save Session Codes Securely">
+    **Risk:** Session codes stored insecurely can be accessed by others.
+    
+    **Best practice:**
+    - Store codes in password managers
+    - Don't save in plain text files on shared computers
+    - Use the browser's local storage (automatic)
+    - Be cautious with screenshot/screen sharing while code is visible
+  </Accordion>
+</AccordionGroup>
+
+## Sensitive Content Feature
+
+ClipSync includes a "Sensitive" flag to protect private information in clipboard history.
+
+### How It Works
+
+<Steps>
+  <Step title="Mark Content as Sensitive">
+    Before sending content, check the "Sensitive" checkbox at the bottom-right of the text area.
+    
+    **Referenced in:** `src/App.jsx:531-536`
+  </Step>
+
+  <Step title="Content is Synced But Hidden">
+    The content is:
+    - Stored in the database normally
+    - Synced to all devices in the session
+    - Replaced with asterisks in the history view
+    
+    **Referenced in:** `src/utils/index.js:2-5`
+  </Step>
+
+  <Step title="Access via Edit or Copy">
+    To access sensitive content:
+    - Click the edit button (✏️) to load into editor
+    - Click copy button (📋) to copy to device clipboard
+    - Original content is copied, not the asterisks
+  </Step>
+</Steps>
+
+### Sensitive Flag Implementation
+
+```javascript
+export const convertLinksToAnchor = (text, item) => {
+  if(item.sensitive) {
+    // replace it with ******
+    return "**********************";
+  }
+  // ... process links normally
+};
+```
+
+**Referenced in:** `src/utils/index.js:1-11`
+
+<Warning>
+  The sensitive flag only hides content in the UI. The actual content is still stored in plain text in the database and transmitted to all devices. It's not encryption.
+</Warning>
+
+### When to Use Sensitive Flag
+
+**Recommended for:**
+- Passwords and credentials
+- API keys and tokens
+- Personal identification numbers
+- Private addresses or phone numbers
+- Financial information
+- Any content you don't want visible on screen
+
+**Not a substitute for:**
+- End-to-end encryption
+- Password managers
+- Secure credential storage
+- Compliance with data protection regulations
+
+<Tip>
+  Use the sensitive flag when screen sharing, presenting, or when others might see your screen. It prevents accidental exposure of private information.
+</Tip>
+
+## Data Encryption in Transit
+
+### HTTPS/TLS Encryption
+
+All communication between ClipSync and Supabase is encrypted:
+
+```javascript
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL; // https://...supabase.co
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+```
+
+**Referenced in:** `src/config/supabase.js:1-5`
+
+**What's encrypted:**
+- HTTP API requests (POST, GET, DELETE)
+- WebSocket connections (Real-time subscriptions)
+- File uploads to storage
+- Database queries
+
+**Encryption details:**
+- Protocol: TLS 1.2 or higher
+- Managed by Supabase infrastructure
+- Same level of encryption as banking sites
+
+### What's NOT Encrypted at Rest
+
+<Warning>
+  Data is stored in plain text in the Supabase database. This means:
+  - Database administrators can read your content
+  - Database backups contain unencrypted data
+  - Anyone with database access can view all sessions
+</Warning>
+
+**Unencrypted data:**
+- Session codes in `sessions` table
+- Clipboard text content in `clipboard` table
+- File metadata (names, paths, types)
+- Uploaded files in storage bucket
+- Timestamps and session associations
+
+**Mitigation:**
+- Use sensitive flag for private content
+- Delete content after use
+- Don't store highly sensitive data long-term
+- Consider self-hosting for full control
+
+## Supabase Security
+
+### Anonymous Key Usage
+
+ClipSync uses Supabase's anonymous (public) key:
+
+```javascript
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+```
+
+**Referenced in:** `src/config/supabase.js:2`
+
+**What this means:**
+- Key is visible in client-side code (by design)
+- Same key for all users
+- Access control via Row Level Security (RLS) policies
+- No per-user authentication
+
+<Note>
+  The anonymous key is safe to expose in client-side code. It's designed for public access, with security enforced through database policies.
+</Note>
+
+### Row Level Security (RLS)
+
+Supabase uses PostgreSQL RLS to control data access:
+
+```sql
+-- Example RLS policy
+CREATE POLICY "Allow all" ON clipboard FOR ALL USING (true);
+```
+
+**Current implementation:**
+- Permissive policies allowing all operations
+- Session isolation enforced at application level
+- No user authentication required
+
+**Security implications:**
+- Anyone can query the database
+- Session codes provide only logical separation
+- Physical security depends on code secrecy
+
+<Warning>
+  For production use with sensitive data, implement stricter RLS policies that limit access based on authenticated users or other criteria.
+</Warning>
+
+### Storage Bucket Security
+
+File uploads use a public storage bucket:
+
+```javascript
+const { data, error } = await supabase.storage
+  .from("clipboard")
+  .upload(`files/${random + file.name}`, file);
+```
+
+**Referenced in:** `src/App.jsx:151`
+
+**Bucket configuration:**
+- Name: `clipboard`
+- Access: Public (required for direct file access)
+- Max file size: 10MB (enforced at application level)
+
+**Security considerations:**
+- All uploaded files are publicly accessible
+- File URLs are predictable (bucket/files/[prefix][filename])
+- No automatic expiration (files persist until deleted)
+- 3-character random prefix prevents some collisions
+
+**Referenced in:** `src/App.jsx:130-134` (random prefix generation)
+
+<Tip>
+  File names include a 3-character random prefix to reduce naming conflicts, but this doesn't provide security through obscurity for files.
+</Tip>
+
+## Best Practices for Sensitive Data
+
+### What to Store in ClipSync
+
+**Safe to store:**
+- Public links and URLs
+- Non-sensitive text snippets
+- Code samples (without credentials)
+- General notes and reminders
+- Public file transfers
+- Temporary collaboration content
+
+**Use with caution:**
+- Passwords (use sensitive flag, delete after use)
+- API keys (use sensitive flag, rotate keys regularly)
+- Personal information (minimize retention time)
+- Work documents (check company policies)
+- Files with metadata (EXIF data, document properties)
+
+**Never store:**
+- Credit card numbers
+- Social security numbers
+- Private keys or certificates
+- Highly confidential business data
+- Medical records
+- Data subject to regulatory compliance (HIPAA, GDPR, etc.)
+
+### Data Retention Strategy
+
+<Steps>
+  <Step title="Immediate Deletion">
+    Delete content immediately after it's been accessed on target device.
+    
+    **How:**
+    1. Copy content to device clipboard
+    2. Click edit button (✏️) on the item
+    3. Click delete (🗑️) to remove from all devices
+    
+    **Referenced in:** `src/App.jsx:249-266`
+  </Step>
+
+  <Step title="Session Cleanup">
+    Regularly clear all clipboard history in active sessions.
+    
+    **How:**
+    1. Click delete all button (🗑️) in clipboard history header
+    2. Confirm deletion
+    3. All content and files are permanently removed
+    
+    **Referenced in:** `src/App.jsx:225-243`
+  </Step>
+
+  <Step title="Leave Temporary Sessions">
+    Exit sessions you no longer need.
+    
+    **How:**
+    1. Click logout button (🚪) next to session code
+    2. Confirm leaving
+    3. Session code removed from local storage
+    
+    **Referenced in:** `src/App.jsx:485-494`
+  </Step>
+</Steps>
+
+<Warning>
+  Leaving a session only disconnects your device. Content remains in the database and accessible to others with the session code. Always delete content before leaving if privacy is a concern.
+</Warning>
+
+### Secure Workflows
+
+#### Password Transfer Workflow
+
+<Steps>
+  <Step title="Create Temporary Session">
+    Start a new session for this single transfer.
+  </Step>
+
+  <Step title="Enable Sensitive Flag">
+    Check "Sensitive" before sending the password.
+  </Step>
+
+  <Step title="Share Session Code Privately">
+    Send code via secure channel (encrypted messaging, in person).
+  </Step>
+
+  <Step title="Verify Receipt">
+    Confirm recipient has copied the password.
+  </Step>
+
+  <Step title="Delete Immediately">
+    Remove the password from clipboard history on both devices.
+  </Step>
+
+  <Step title="Leave Session">
+    Both parties leave the session.
+  </Step>
+</Steps>
+
+#### File Transfer Workflow
+
+<Steps>
+  <Step title="Check File Sensitivity">
+    Ensure file doesn't contain sensitive metadata or content.
+  </Step>
+
+  <Step title="Use Dedicated Session">
+    Create a session just for this file transfer.
+  </Step>
+
+  <Step title="Upload and Share Code">
+    Upload file, then share session code with recipient.
+  </Step>
+
+  <Step title="Recipient Downloads">
+    Recipient joins session and downloads file.
+  </Step>
+
+  <Step title="Delete File">
+    Delete from ClipSync storage after download confirmed.
+    
+    **Referenced in:** `src/App.jsx:594-600`
+  </Step>
+</Steps>
+
+## Session Isolation
+
+### How Isolation Works
+
+Each session is logically isolated by its session code:
+
+```javascript
+const { data, error } = await supabase
+  .from("clipboard")
+  .select("*")
+  .eq("session_code", sessionCode) // Filter by session
+  .order("created_at", { ascending: false });
+```
+
+**Referenced in:** `src/App.jsx:33-36`, `src/App.jsx:69-73`
+
+**Isolation guarantees:**
+- Each session only sees its own clipboard items
+- Real-time updates filtered by session code
+- Database queries restricted to current session
+- File uploads tagged with session association
+
+**Isolation implementation:**
+
+```javascript
+if (payload.new.session_code === sessionCode && payload.eventType === "INSERT") {
+  setHistory((prev) => [payload.new, ...prev]);
+}
+```
+
+**Referenced in:** `src/App.jsx:390-392`
+
+### Cross-Session Security
+
+**Can users access other sessions?**
+- Not through the application UI
+- Theoretically possible via direct database queries
+- Session codes must be known or guessed
+
+**Protection mechanisms:**
+1. Session codes are random and unpredictable
+2. No session listing or discovery feature
+3. Application enforces session filtering
+4. Real-time subscriptions filtered by session
+
+<Note>
+  Session isolation is enforced at the application level, not the database level. Users with database access can query across sessions.
+</Note>
+
+## Security Limitations
+
+### Known Limitations
+
+<Warning>
+  ClipSync is not suitable for:
+  - Storing passwords long-term (use a password manager)
+  - Sharing highly sensitive business data
+  - Compliance with strict data protection regulations
+  - Scenarios requiring audit trails
+  - Multi-user permission systems
+  - End-to-end encryption requirements
+</Warning>
+
+### Technical Limitations
+
+1. **No end-to-end encryption**: Data readable by database administrators
+2. **No user authentication**: Access control via session codes only
+3. **No access logs**: Can't track who accessed what content
+4. **No permission system**: All session members have full access
+5. **No session expiration**: Sessions persist indefinitely
+6. **Public storage**: Uploaded files accessible via URL
+
+### Threat Model
+
+**Protected against:**
+- Casual browsing by non-participants
+- Accidental data exposure in session history (via sensitive flag)
+- Man-in-the-middle attacks (via HTTPS)
+- Network eavesdropping (via TLS encryption)
+
+**Not protected against:**
+- Intentional session code guessing (low probability)
+- Database administrator access
+- Compromised Supabase credentials
+- Client-side attacks (XSS, if vulnerabilities exist)
+- Screen capture or shoulder surfing
+- Shared computer access (session stored in browser)
+
+## Privacy Considerations
+
+### Data Storage Duration
+
+Content persists until explicitly deleted:
+- No automatic expiration
+- Sessions remain active indefinitely
+- Files stored permanently until deleted
+- No data retention policies by default
+
+**Recommendation:** Implement automatic cleanup for inactive sessions if self-hosting.
+
+### Data Visibility
+
+**Who can see your data:**
+1. **You and session participants**: Via application UI
+2. **Database administrators**: Via direct database access
+3. **Supabase staff**: In rare cases for support or maintenance
+4. **Backup systems**: Data included in database backups
+5. **Potential attackers**: If session code is compromised
+
+### Metadata Leakage
+
+**Exposed metadata:**
+- File names (visible in storage URLs)
+- Upload timestamps
+- Session creation times
+- Number of items in session
+- File sizes and types
+
+<Tip>
+  Be mindful of file names. They're visible in URLs and may reveal information about content. Rename files before uploading if names are sensitive.
+</Tip>
+
+## Compliance Considerations
+
+### GDPR and Data Protection
+
+If using ClipSync with EU user data:
+
+- **Right to deletion**: Implement via delete all feature
+- **Data portability**: No export feature currently
+- **Purpose limitation**: Use separate sessions for different purposes
+- **Data minimization**: Delete content after use
+- **Storage limitation**: No automatic expiration
+
+<Warning>
+  ClipSync in its default configuration may not be fully GDPR compliant for handling personal data. Consult legal counsel for regulated use cases.
+</Warning>
+
+### HIPAA and Healthcare Data
+
+<Warning>
+  ClipSync is NOT HIPAA compliant. Do not use for protected health information (PHI).
+</Warning>
+
+**Missing HIPAA requirements:**
+- No audit controls
+- No user authentication
+- No access controls
+- No encryption at rest
+- No business associate agreement (BAA)
+
+## Recommendations for Enhanced Security
+
+If you need stronger security:
+
+### 1. Self-Host ClipSync
+
+- Full control over data storage
+- Implement custom security policies
+- Add authentication layer
+- Enable encryption at rest
+- Control backup and retention
+
+### 2. Implement Authentication
+
+```javascript
+// Add user authentication before session access
+const { user, error } = await supabase.auth.signIn({
+  email: userEmail,
+  password: userPassword
+});
+```
+
+Then tie sessions to authenticated users.
+
+### 3. Add End-to-End Encryption
+
+Encrypt content before sending to database:
+
+```javascript
+// Pseudo-code example
+const encrypted = encrypt(content, sessionCode);
+await supabase.from("clipboard").insert([{ content: encrypted }]);
+```
+
+Decrypt on retrieval. Session code becomes encryption key.
+
+### 4. Implement Session Expiration
+
+Automatically delete old sessions:
+
+```sql
+DELETE FROM clipboard 
+WHERE created_at < NOW() - INTERVAL '24 hours';
+```
+
+Run as scheduled job.
+
+### 5. Add Row Level Security
+
+Stricter RLS policies:
+
+```sql
+CREATE POLICY "Users see only their sessions" 
+ON clipboard FOR SELECT 
+USING (auth.uid() = user_id);
+```
+
+Requires authentication system.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Setup Supabase" icon="database" href="/guides/setup-supabase">
+    Configure backend with security best practices
+  </Card>
+  <Card title="Multi-Device Sync" icon="arrows-rotate" href="/guides/multi-device-sync">
+    Learn secure workflows for device synchronization
+  </Card>
+</CardGroup>
