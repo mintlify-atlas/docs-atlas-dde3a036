@@ -41,7 +41,7 @@ export const convertLinksToAnchor = (text, item) => {
 
 ```typescript
 string
-```
+```typescript
 
 Returns an HTML string with URLs converted to anchor tags, or masked content if sensitive.
 
@@ -51,7 +51,7 @@ The function matches URLs using the following regex pattern:
 
 ```javascript
 /(https?:\/\/[^\s]+|www\.[^\s]+)/g
-```
+```javascript
 
 This matches:
 - **HTTP/HTTPS URLs**: `http://example.com` or `https://example.com`
@@ -84,7 +84,7 @@ When `item.sensitive` is `true`, the function returns a masked string instead of
 
 ```javascript
 "**********************"
-```
+```javascript
 
 This prevents sensitive information like passwords, API keys, or personal data from being displayed in the UI.
 
@@ -105,7 +105,7 @@ const html = convertLinksToAnchor(
 
 // Result:
 // Check out <a href="https://example.com" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline">https://example.com</a> and <a href="https://www.github.com" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline">www.github.com</a>
-```
+```javascript
 
 ### Example with Sensitive Content
 
@@ -122,7 +122,7 @@ const html = convertLinksToAnchor(
 
 // Result:
 // "**********************"
-```
+```javascript
 
 ### Rendering in React
 
@@ -134,7 +134,7 @@ The function returns HTML strings that should be rendered using `dangerouslySetI
     __html: convertLinksToAnchor(item.content, item)
   }}
 />
-```
+```jsx
 
 ### Security Considerations
 

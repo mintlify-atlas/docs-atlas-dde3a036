@@ -81,9 +81,9 @@ The function enforces a maximum file size of **10MB** (10 * 1024 * 1024 bytes). 
 
 Files are uploaded to Supabase Storage with the following path structure:
 
-```
+```text
 clipboard/files/{RANDOM_CODE}{ORIGINAL_FILENAME}
-```
+```text
 
 Where:
 - `clipboard` is the storage bucket name
@@ -107,7 +107,7 @@ Returns `Promise<void>`. On success, updates component state with the file URL a
   type: string,          // "file" or "image"
   // ...other Supabase storage metadata
 }
-```
+```javascript
 
 ### Accepted File Types
 
@@ -132,7 +132,7 @@ The application accepts the following file types:
     e.target.value = null; // Clear input
   }} 
 />
-```
+```jsx
 
 ---
 
@@ -232,7 +232,7 @@ async function handleImageUpload(imageFile) {
     console.error("Compression failed:", error);
   }
 }
-```
+```javascript
 
 ### File Metadata
 
